@@ -45,6 +45,9 @@ export async function runRepl(opts: {
   if (engine.llmLogDir) {
     console.log(chalk.dim(`llm-log=${engine.llmLogDir}`));
   }
+  if (engine.execLogDir) {
+    console.log(chalk.dim(`exec-log=${engine.execLogDir}`));
+  }
   console.log(chalk.dim("Commands: /help /clear /exit  |  Ctrl+C to abort turn\n"));
 
   try {
@@ -105,6 +108,9 @@ export async function runPrint(opts: {
 
   if (engine.llmLogDir) {
     console.error(`[agent-cli] llm-log=${engine.llmLogDir}`);
+  }
+  if (engine.execLogDir) {
+    console.error(`[agent-cli] exec-log=${engine.execLogDir}`);
   }
 
   try {

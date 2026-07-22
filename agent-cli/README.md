@@ -16,6 +16,7 @@ Educational **TypeScript coding-agent CLI** inspired by [Claude Code](https://do
 | Append-only JSONL sessions | `src/session/SessionStore.ts` |
 | MCP stdio tools | `src/services/mcp/client.ts` |
 | LLM request local logs | `src/services/debug/llmRequestLog.ts` |
+| Session execution logs | `src/services/debug/sessionExecLog.ts` |
 | `--print` headless mode | CLI `-p` |
 
 ## Quick start
@@ -55,6 +56,18 @@ Supported providers via `AGENT_PROVIDER`: `deepseek` | `openai` | `anthropic` (a
 ```
 
 关闭：`AGENT_LLM_LOG=0`。自定义目录：`AGENT_LLM_LOG_DIR=...`。
+
+## 会话执行日志
+
+默认开启：记录用户输入、工具调用/结果、助手输出、权限决定、结束原因：
+
+```text
+.sessions/exec-logs/<sessionId>/
+  exec.jsonl   # 结构化事件
+  exec.log     # 人类可读
+```
+
+关闭：`AGENT_EXEC_LOG=0`。
 
 ## Built-in tools
 
