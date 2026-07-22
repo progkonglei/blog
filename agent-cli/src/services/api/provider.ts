@@ -2,6 +2,7 @@ import { createAnthropicModelCall } from "./anthropic.js";
 import { createOpenAICompatibleModelCall } from "./openaiCompatible.js";
 import type { ModelRequest, ModelResponse } from "../../query/queryLoop.js";
 import type { StreamEvent } from "../../types/messages.js";
+import { requireApiKey } from "../../config/env.js";
 
 export type ModelCaller = (req: ModelRequest) => AsyncGenerator<StreamEvent, ModelResponse>;
 
@@ -27,20 +28,34 @@ export function createModelCall(): ModelCaller {
           : "deepseek");
 
   if (provider === "anthropic") {
-    return createAnthropicModelCall();
+    const apiKey = requireApiKey(
+      "anthropic",
+      [process.env.ANTHROPIC_API_KEY],
+      "Set ANTHROPIC_API_KEY in agent-cli/.env",
+    );
+    return createAnthropicModelCall({ apiKey });
   }
 
   if (provider === "deepseek") {
+    const apiKey = requireApiKey(
+      "deepseek",
+      [process.env.DEEPSEEK_API_KEY, process.env.OPENAI_API_KEY],
+      "Set DEEPSEEK_API_KEY in agent-cli/.env",
+    );
     return createOpenAICompatibleModelCall({
-      apiKey: process.env.DEEPSEEK_API_KEY ?? process.env.OPENAI_API_KEY,
+      apiKey,
       baseURL: process.env.DEEPSEEK_BASE_URL ?? process.env.OPENAI_BASE_URL ?? "https://api.deepseek.com",
       model: process.env.DEEPSEEK_MODEL ?? process.env.OPENAI_MODEL ?? "deepseek-chat",
     });
   }
 
-  // openai or any openai-compatible gateway
+  const apiKey = requireApiKey(
+    "openai",
+    [process.env.OPENAI_API_KEY, process.env.DEEPSEEK_API_KEY],
+    "Set OPENAI_API_KEY in agent-cli/.env",
+  );
   return createOpenAICompatibleModelCall({
-    apiKey: process.env.OPENAI_API_KEY ?? process.env.DEEPSEEK_API_KEY,
+    apiKey,
     baseURL: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
     model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
   });

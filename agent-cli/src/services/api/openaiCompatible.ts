@@ -20,6 +20,11 @@ export function createOpenAICompatibleModelCall(opts?: {
     process.env.DEEPSEEK_API_KEY ??
     process.env.OPENAI_API_KEY ??
     process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "Missing API key. Set DEEPSEEK_API_KEY (or OPENAI_API_KEY) in agent-cli/.env — see .env.example",
+    );
+  }
   const baseURL =
     opts?.baseURL ??
     process.env.OPENAI_BASE_URL ??
@@ -28,6 +33,7 @@ export function createOpenAICompatibleModelCall(opts?: {
   const model =
     opts?.model ?? process.env.OPENAI_MODEL ?? process.env.DEEPSEEK_MODEL ?? "deepseek-chat";
 
+  // Pass apiKey explicitly so the SDK does not look for OPENAI_API_KEY only.
   const client = new OpenAI({ apiKey, baseURL });
 
   return async function* modelCall(req: ModelRequest): AsyncGenerator<StreamEvent, ModelResponse> {
