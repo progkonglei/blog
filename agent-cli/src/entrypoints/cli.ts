@@ -1,6 +1,14 @@
 #!/usr/bin/env node
-import { Command } from "commander";
+import { config as loadEnv } from "dotenv";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Load .env from package root and cwd (never commit secrets)
+const here = path.dirname(fileURLToPath(import.meta.url));
+loadEnv({ path: path.resolve(here, "../../.env"), quiet: true });
+loadEnv({ path: path.resolve(process.cwd(), ".env"), quiet: true });
+
+import { Command } from "commander";
 import { runPrint, runRepl } from "../ui/repl.js";
 import type { PermissionMode } from "../types/messages.js";
 

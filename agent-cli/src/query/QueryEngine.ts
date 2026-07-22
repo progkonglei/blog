@@ -1,7 +1,7 @@
 import type { Message, PermissionMode, StreamEvent, TerminalReason } from "../types/messages.js";
 import type { ToolDefinition, ToolContext } from "../tools/Tool.js";
 import { runQueryLoop } from "./queryLoop.js";
-import { createAnthropicModelCall } from "../services/api/anthropic.js";
+import { createModelCall } from "../services/api/provider.js";
 import { createBuiltinTools } from "../tools/registry.js";
 import { assembleSystemPrompt } from "../context/assemble.js";
 import { loadMcpTools } from "../services/mcp/client.js";
@@ -31,7 +31,7 @@ export class QueryEngine {
   private systemPrompt = "";
   private session: SessionStore | null = null;
   private closeMcp: (() => Promise<void>) | null = null;
-  private modelCall = createAnthropicModelCall();
+  private modelCall = createModelCall();
   private maxTurns: number;
   private enableMcp: boolean;
   private sessionDir: string;
