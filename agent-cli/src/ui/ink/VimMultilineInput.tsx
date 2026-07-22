@@ -7,7 +7,7 @@
  * 去掉双层边框 / 多余 │，避免「乱」
  */
 import React, { useState, useCallback } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useStdout } from "ink";
 
 export type VimMode = "insert" | "normal";
 
@@ -17,10 +17,13 @@ type Props = {
 };
 
 export function VimMultilineInput({ onSubmit, disabled }: Props) {
+  const { stdout } = useStdout();
   const [mode, setMode] = useState<VimMode>("insert");
   const [lines, setLines] = useState<string[]>([""]);
   const [row, setRow] = useState(0);
   const [col, setCol] = useState(0);
+  const ruleWidth = Math.max(24, Math.min(stdout?.columns ?? 72, 96));
+  const rule = "─".repeat(ruleWidth);
 
   const current = lines[row] ?? "";
 
@@ -186,6 +189,8 @@ export function VimMultilineInput({ onSubmit, disabled }: Props) {
 
   return (
     <Box flexDirection="column" marginTop={1}>
+      {/* Claude Code–style prompt separator */}
+      <Text dimColor>{rule}</Text>
       {lines.map((line, i) => {
         const prefix = i === 0 ? (
           <Text color="#D97757" bold>
