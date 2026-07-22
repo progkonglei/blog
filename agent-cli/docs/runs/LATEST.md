@@ -1,8 +1,8 @@
 # 最近一次会话
 
-来源: [`2026-07-22_3c3c24ca.md`](./2026-07-22_3c3c24ca.md)
+来源: [`2026-07-22_fa336560.md`](./2026-07-22_fa336560.md)
 
-# 会话沉淀 2026-07-22_3c3c24ca
+# 会话沉淀 2026-07-22_fa336560
 
 > 自动生成 · 已结束
 
@@ -17,8 +17,8 @@
 - 用户: hello
 - 工具: Glob
 - LLM 调用: 2
-- 耗时: 16 ms
-- 详情: [`turn-01.md`](./2026-07-22_3c3c24ca/turn-01.md)
+- 耗时: 13 ms
+- 详情: [`turn-01.md`](./2026-07-22_fa336560/turn-01.md)
 
 ## 会话总览
 
@@ -26,7 +26,7 @@
 
 | 项 | 值 |
 |---|---|
-| sessionId | 3c3c24ca-7de7-4ea8-a6cf-8af0f0ff0900 |
+| sessionId | fa336560-386e-446a-8734-2102dccfda99 |
 | cwd | /workspace/agent-cli |
 | permissionMode | acceptEdits |
 | turns | 1 |

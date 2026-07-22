@@ -32,8 +32,11 @@ cp .env.example .env
 #   AGENT_PROVIDER=anthropic
 #   ANTHROPIC_API_KEY=sk-ant-...
 
-# Interactive REPL
+# Interactive Ink TUI (default)
 npm run dev
+
+# Classic readline UI
+npm run dev -- --legacy-ui
 
 # Headless (auto-accepts edits)
 npm run dev -- -p "List TypeScript files and summarize package.json" --permission-mode acceptEdits
@@ -85,7 +88,16 @@ docs/runs/
 
 ## Built-in tools
 
-`Bash` · `Read` · `Write` · `Edit` · `Glob` · `Grep` · `Agent` (+ MCP tools if configured)
+`Bash` · `Read` · `Write` · `Edit` · `Glob` · `Grep` · `Agent` · `Orchestrate`（并行多 Agent）(+ MCP)
+
+## Ink TUI
+
+默认交互界面为 Ink/React：
+
+- 可滚动会话（PgUp / PgDn）
+- 多行输入（Ctrl+J 换行，Enter 发送）
+- Vim：Esc → NORMAL（hjkl / i / a / dd），Enter 发送
+- `--legacy-ui` 回退旧版 readline UI
 
 ## MCP
 
@@ -108,16 +120,19 @@ Create `.agent-cli/mcp.json`:
 src/
   entrypoints/cli.ts     # Commander entry
   query/                 # QueryEngine + AsyncGenerator loop
-  tools/                 # Builtin tools + Agent subagent
+  tools/                 # Builtin tools + Agent + Orchestrate
+  orchestrator/          # 并行多 Agent
   permissions/           # Path safety + permission gate
   context/               # System prompt / CLAUDE.md
   session/               # JSONL persistence
   services/
     api/                 # 模型提供商（DeepSeek/Anthropic/OpenAI）
-    debug/               # LLM 请求落盘
+    debug/               # LLM 请求落盘 + 执行日志 + 文档沉淀
     compact/             # Auto-compact
     mcp/                 # MCP client
-  ui/repl.ts             # Terminal REPL / print renderer
+  ui/
+    ink/                 # Ink/React TUI（默认 REPL）
+    repl.ts              # legacy readline / --print
 ```
 
 ## Disclaimer

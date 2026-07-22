@@ -4,4 +4,5 @@
 
 | 时间 | Session | Turns | 摘要 | 文件 |
 |---|---|---|---|---|
+| 2026-07-22T15:04:53 | `fa336560` | 1 | Turn 1: 用户「hello」→ LLM×2 → 工具[Glob] → Mock: listing package.json via Glob. Mock… | [`2026-07-22_fa336560.md`](./2026-07-22_fa336560.md) |
 | 2026-07-22T15:00:52 | `3c3c24ca` | 1 | Turn 1: 用户「hello」→ LLM×2 → 工具[Glob] → Mock: listing package.json via Glob. Mock… | [`2026-07-22_3c3c24ca.md`](./2026-07-22_3c3c24ca.md) |

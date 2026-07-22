@@ -15,7 +15,6 @@ const loaded = loadAgentEnv();
 
 const { Command } = await import("commander");
 const path = await import("node:path");
-const { runPrint, runRepl } = await import("../ui/repl.js");
 type PermissionMode = import("../types/messages.js").PermissionMode;
 
 function parseMode(raw?: string): PermissionMode {
@@ -39,6 +38,7 @@ program
   .option("-p, --print [prompt]", "Headless single-shot mode (Claude Code --print)")
   .option("--resume <sessionId>", "Resume a JSONL session id from .sessions/")
   .option("--no-mcp", "Disable MCP tool loading")
+  .option("--legacy-ui", "Use classic readline UI instead of Ink TUI")
   .argument("[prompt...]", "Optional initial prompt (REPL still starts unless --print)")
   .action(async (promptParts: string[], opts) => {
     const hasKey = Boolean(
@@ -62,6 +62,7 @@ program
 
     // --print：无头单次
     if (opts.print !== undefined) {
+      const { runPrint } = await import("../ui/repl.js");
       const prompt =
         typeof opts.print === "string" && opts.print.length > 0
           ? opts.print
@@ -73,12 +74,25 @@ program
 
     // 位置参数当 prompt：也走无头模式，方便脚本调用
     if (joined) {
+      const { runPrint } = await import("../ui/repl.js");
       const code = await runPrint({ cwd, permissionMode, prompt: joined, enableMcp });
       process.exitCode = code;
       return;
     }
 
-    await runRepl({
+    if (opts.legacyUi) {
+      const { runRepl } = await import("../ui/repl.js");
+      await runRepl({
+        cwd,
+        permissionMode,
+        resume: opts.resume as string | undefined,
+        enableMcp,
+      });
+      return;
+    }
+
+    const { runInkRepl } = await import("../ui/ink/runInkRepl.js");
+    await runInkRepl({
       cwd,
       permissionMode,
       resume: opts.resume as string | undefined,
