@@ -2,7 +2,9 @@
 
 | 文档 | 说明 |
 |------|------|
+| [directory-structure.md](./directory-structure.md) | **目录结构分析**（分层、依赖、扩展指引） |
 | [input-output-execution.md](./input-output-execution.md) | 输入→输出链路与稳定性分析 |
+| [ink-and-orchestrate.md](./ink-and-orchestrate.md) | Ink TUI 与并行多 Agent |
 | [runs/](./runs/) | **每次运行自动沉淀**的会话文档 |
 
 ## 自动沉淀（Doc Deposit）
