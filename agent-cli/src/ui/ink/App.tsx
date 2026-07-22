@@ -1,13 +1,16 @@
 /**
- * Ink REPL 主界面
- * - 上方：可滚动消息（PgUp/PgDn）
- * - 下方：Vim 多行输入
- * - 运行中禁用输入，流式追加消息
+ * Claude Code 风格 Ink REPL
+ *
+ * 关键差异（相对旧版「乱」的原因）：
+ * 1. 不用 height=终端行数 的全屏仪表盘布局（边框套边框会乱）
+ * 2. 用 <Static> 沉淀已完成消息，像 transcript 往上滚
+ * 3. 输入区极简 › ，无双层 round border
+ * 4. 工具行对齐 ● / ⎿ ，少状态栏噪音
  */
-import React, { useCallback, useMemo, useState } from "react";
-import { Box, Text, useApp, useInput, useStdout } from "ink";
+import React, { useCallback, useState } from "react";
+import { Box, Text, Static, useApp, useInput } from "ink";
 import { VimMultilineInput } from "./VimMultilineInput.js";
-import { MessageList, type UiMessage } from "./MessageList.js";
+import { MessageRow, type UiMessage } from "./MessageList.js";
 import type { QueryEngine } from "../../query/QueryEngine.js";
 import type { StreamEvent } from "../../types/messages.js";
 
@@ -25,33 +28,22 @@ function mid(): string {
 
 export function InkApp({ engine, cwd, mode }: Props) {
   const { exit } = useApp();
-  const { stdout } = useStdout();
-  const rows = stdout?.rows ?? 24;
 
-  const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [scrollOffset, setScrollOffset] = useState(0);
+  /** 已定稿消息 → Static（不再重绘） */
+  const [done, setDone] = useState<UiMessage[]>([]);
+  /** 当前回合临时消息（流式 / 运行中工具） */
+  const [live, setLive] = useState<UiMessage[]>([]);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("ready");
 
-  const maxVisible = Math.max(6, rows - 10);
-
-  const append = useCallback((m: UiMessage) => {
-    setMessages((prev) => [...prev, m]);
-    setScrollOffset(0);
+  const pushDone = useCallback((items: UiMessage[]) => {
+    if (!items.length) return;
+    setDone((prev) => [...prev, ...items]);
   }, []);
 
   useInput((input, key) => {
-    if (key.pageUp) {
-      setScrollOffset((o) => Math.min(messages.length, o + Math.max(1, Math.floor(maxVisible / 2))));
-      return;
-    }
-    if (key.pageDown) {
-      setScrollOffset((o) => Math.max(0, o - Math.max(1, Math.floor(maxVisible / 2))));
-      return;
-    }
-    if (busy) return;
-    if (input === "q" && key.ctrl) {
-      void engine.dispose().finally(() => exit());
+    if (input === "c" && key.ctrl) {
+      // 忙时中断体验：直接退出；后续可接 AbortController
+      if (!busy) void engine.dispose().finally(() => exit());
     }
   });
 
@@ -67,142 +59,155 @@ export function InkApp({ engine, cwd, mode }: Props) {
       }
       if (t === "/clear") {
         engine.clear();
-        setMessages([]);
-        setStatus("cleared");
+        setDone([]);
+        setLive([]);
         return;
       }
       if (t === "/help") {
-        append({
-          id: mid(),
-          kind: "status",
-          text: "/help /clear /exit · Esc=vim · Ctrl+J=newline · Enter=send · PgUp/PgDn · Orchestrate=parallel agents",
-        });
+        setDone((prev) => [
+          ...prev,
+          {
+            id: mid(),
+            kind: "status",
+            text: "/help  /clear  /exit · esc=vim · ctrl+j=newline · enter=send",
+          },
+        ]);
         return;
       }
 
-      append({ id: mid(), kind: "user", text: t });
+      const userMsg: UiMessage = { id: mid(), kind: "user", text: t };
+      setDone((prev) => [...prev, userMsg]);
+      setLive([{ id: mid(), kind: "thinking", text: "Thinking…" }]);
       setBusy(true);
-      setStatus("running…");
 
-      const ac = new AbortController();
       let assistantId: string | null = null;
       const toolMap = new Map<string, string>();
 
+      const upsertLive = (updater: (prev: UiMessage[]) => UiMessage[]) => {
+        setLive((prev) => updater(prev));
+      };
+
       try {
-        const gen = engine.submit(t, ac.signal);
+        const gen = engine.submit(t);
         let next = await gen.next();
         while (!next.done) {
-          handleStream(next.value);
+          handle(next.value);
           next = await gen.next();
         }
-        setStatus(next.value.kind === "end_turn" ? "ready" : next.value.kind);
-      } catch (err) {
-        append({
-          id: mid(),
-          kind: "status",
-          text: `error: ${err instanceof Error ? err.message : String(err)}`,
+        // 把 live 里非 thinking 的定稿进 Static
+        setLive((prev) => {
+          const finalized = prev.filter((m) => m.kind !== "thinking");
+          if (finalized.length) pushDone(finalized);
+          return [];
         });
-        setStatus("error");
+      } catch (err) {
+        pushDone([
+          {
+            id: mid(),
+            kind: "status",
+            text: `error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        ]);
+        setLive([]);
       } finally {
         setBusy(false);
       }
 
-      function handleStream(ev: StreamEvent) {
+      function handle(ev: StreamEvent) {
         if (ev.type === "text_delta") {
-          if (!assistantId) {
-            assistantId = mid();
-            append({ id: assistantId, kind: "assistant", text: ev.text });
-          } else {
-            const aid = assistantId;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === aid && m.kind === "assistant" ? { ...m, text: m.text + ev.text } : m,
-              ),
+          upsertLive((prev) => {
+            // 去掉 thinking
+            const withoutThinking = prev.filter((m) => m.kind !== "thinking");
+            if (!assistantId) {
+              assistantId = mid();
+              return [...withoutThinking, { id: assistantId, kind: "assistant", text: ev.text }];
+            }
+            return withoutThinking.map((m) =>
+              m.id === assistantId && m.kind === "assistant"
+                ? { ...m, text: m.text + ev.text }
+                : m,
             );
-          }
+          });
           return;
         }
+
         if (ev.type === "tool_start") {
           assistantId = null;
           const id = mid();
           toolMap.set(ev.id, id);
           const args =
             Object.keys(ev.input).length === 1
-              ? String(Object.values(ev.input)[0]).slice(0, 64)
-              : JSON.stringify(ev.input).slice(0, 64);
-          append({
-            id,
-            kind: "tool",
-            name: ev.name,
-            args,
-            running: true,
+              ? String(Object.values(ev.input)[0]).slice(0, 72)
+              : JSON.stringify(ev.input).slice(0, 72);
+
+          upsertLive((prev) => {
+            const base = prev.filter((m) => m.kind !== "thinking");
+            const rows: UiMessage[] = [
+              ...base,
+              { id, kind: "tool", name: ev.name, args, running: true },
+            ];
+            if (ev.name === "Orchestrate" && Array.isArray((ev.input as { tasks?: unknown }).tasks)) {
+              const tasks = (ev.input as { tasks: Array<{ description: string }> }).tasks;
+              rows.push({
+                id: mid(),
+                kind: "agents",
+                items: tasks.map((x) => ({ description: x.description, status: "running" })),
+              });
+            }
+            return rows;
           });
-          if (ev.name === "Orchestrate" && Array.isArray((ev.input as { tasks?: unknown }).tasks)) {
-            const tasks = (ev.input as { tasks: Array<{ description: string }> }).tasks;
-            append({
-              id: mid(),
-              kind: "agents",
-              items: tasks.map((x) => ({ description: x.description, status: "running" })),
-            });
-          }
           return;
         }
+
         if (ev.type === "tool_result") {
           const uiId = toolMap.get(ev.id);
-          if (uiId) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === uiId && m.kind === "tool"
-                  ? {
-                      ...m,
-                      running: false,
-                      error: ev.isError,
-                      result: ev.output.replace(/\s+/g, " ").trim().slice(0, 100),
-                    }
-                  : m,
-              ),
-            );
-          }
+          if (!uiId) return;
+          upsertLive((prev) =>
+            prev.map((m) =>
+              m.id === uiId && m.kind === "tool"
+                ? {
+                    ...m,
+                    running: false,
+                    error: ev.isError,
+                    result: ev.output.replace(/\s+/g, " ").trim().slice(0, 120),
+                  }
+                : m,
+            ),
+          );
           return;
         }
-        if (ev.type === "phase" && ev.phase === "model_call_start") {
-          setStatus(`model step ${ev.step}…`);
-        }
+
         if (ev.type === "error") {
-          append({ id: mid(), kind: "status", text: ev.error });
+          upsertLive((prev) => [
+            ...prev.filter((m) => m.kind !== "thinking"),
+            { id: mid(), kind: "status", text: ev.error },
+          ]);
         }
       }
     },
-    [append, busy, engine, exit],
+    [busy, engine, exit, pushDone],
   );
 
-  const header = useMemo(
-    () =>
-      `agent-cli · ${mode} · ${cwd.slice(-48)} · session ${(engine.sessionId ?? "").slice(0, 8)}…`,
-    [cwd, engine.sessionId, mode],
-  );
+  const shortCwd = cwd.length > 42 ? `…${cwd.slice(-41)}` : cwd;
 
   return (
-    <Box flexDirection="column" height={rows} width="100%">
-      <Box borderStyle="single" borderColor="gray" paddingX={1}>
-        <Text color="#D97757" bold>
-          ✻{" "}
+    <Box flexDirection="column" paddingX={1}>
+      {/* 极简欢迎 — 对标 Claude Code 启动信息，无大边框 */}
+      <Box marginBottom={1} flexDirection="column">
+        <Text>
+          <Text color="#D97757" bold>
+            ✻ agent-cli
+          </Text>
+          <Text dimColor> · {mode}</Text>
         </Text>
-        <Text dimColor>{header}</Text>
-        <Text> </Text>
-        <Text color={busy ? "yellow" : "green"}>{busy ? "● busy" : "● idle"}</Text>
+        <Text dimColor>{shortCwd}</Text>
       </Box>
 
-      <Box flexGrow={1} flexDirection="column" paddingX={1}>
-        <MessageList messages={messages} scrollOffset={scrollOffset} maxVisible={maxVisible} />
-      </Box>
+      <Static items={done}>{(msg) => <MessageRow key={msg.id} msg={msg} />}</Static>
 
-      <Box paddingX={1}>
-        <Text dimColor>
-          {status}
-          {engine.docsPath ? ` · docs ${engine.docsPath}` : ""}
-        </Text>
-      </Box>
+      {live.map((msg) => (
+        <MessageRow key={msg.id} msg={msg} />
+      ))}
 
       <VimMultilineInput onSubmit={(v) => void onSubmit(v)} disabled={busy} />
     </Box>

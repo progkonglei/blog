@@ -1,97 +1,95 @@
-/**
- * 可滚动会话消息列表
- */
 import React from "react";
 import { Box, Text } from "ink";
 
+/** Claude Code–style transcript message shapes */
 export type UiMessage =
   | { id: string; kind: "user"; text: string }
   | { id: string; kind: "assistant"; text: string }
-  | { id: string; kind: "tool"; name: string; args: string; result?: string; error?: boolean; running?: boolean }
+  | {
+      id: string;
+      kind: "tool";
+      name: string;
+      args?: string;
+      result?: string;
+      running?: boolean;
+      error?: boolean;
+    }
+  | { id: string; kind: "thinking"; text: string }
   | { id: string; kind: "status"; text: string }
-  | { id: string; kind: "agents"; items: Array<{ description: string; status: string }> };
+  | {
+      id: string;
+      kind: "agents";
+      items: Array<{ description: string; status: string }>;
+    };
 
-type Props = {
-  messages: UiMessage[];
-  scrollOffset: number;
-  maxVisible: number;
-};
-
-export function MessageList({ messages, scrollOffset, maxVisible }: Props) {
-  const start = Math.max(0, messages.length - maxVisible - scrollOffset);
-  const end = Math.max(0, messages.length - scrollOffset);
-  const visible = messages.slice(start, end);
-
-  return (
-    <Box flexDirection="column" flexGrow={1}>
-      {visible.length === 0 ? (
-        <Text dimColor>conversation empty · type below</Text>
-      ) : (
-        visible.map((m) => <MessageRow key={m.id} msg={m} />)
-      )}
-      {scrollOffset > 0 ? (
-        <Text dimColor>
-          ↑ {scrollOffset} more below · PgDn
-        </Text>
-      ) : null}
-    </Box>
-  );
-}
-
-function MessageRow({ msg }: { msg: UiMessage }) {
+/**
+ * Single transcript row — no nested bordered cards.
+ * Aligns with Claude Code: › user, plain assistant, ● tool / ⎿ result
+ */
+export function MessageRow({ msg }: { msg: UiMessage }): React.ReactElement {
   switch (msg.kind) {
     case "user":
       return (
-        <Box marginY={0}>
-          <Text color="#D97757" bold>
-            ❯{" "}
+        <Box marginBottom={1} flexDirection="column">
+          <Text>
+            <Text color="#D97757" bold>
+              ›{" "}
+            </Text>
+            <Text>{msg.text}</Text>
           </Text>
+        </Box>
+      );
+
+    case "assistant":
+      return (
+        <Box marginBottom={1} flexDirection="column">
           <Text>{msg.text}</Text>
         </Box>
       );
-    case "assistant":
+
+    case "thinking":
       return (
-        <Box marginY={0}>
-          <Text>{msg.text || " "}</Text>
+        <Box marginBottom={0}>
+          <Text dimColor>✽ {msg.text}</Text>
         </Box>
       );
+
     case "tool":
       return (
-        <Box flexDirection="column" marginY={0}>
+        <Box flexDirection="column" marginBottom={0}>
           <Text>
-            <Text color={msg.running ? "magenta" : msg.error ? "red" : "#D97757"}>●</Text>{" "}
-            <Text>
-              {msg.name}({msg.args})
-            </Text>
-            {msg.running ? <Text color="magenta"> …</Text> : null}
+            <Text color={msg.error ? "red" : "magenta"}>●</Text>{" "}
+            <Text bold>{msg.name}</Text>
+            {msg.args ? <Text dimColor>({msg.args})</Text> : null}
+            {msg.running ? <Text dimColor> …</Text> : null}
           </Text>
-          {msg.result != null && !msg.running ? (
-            <Text dimColor>
-              {"  "}⎿ {msg.result}
+          {msg.result ? (
+            <Text color={msg.error ? "red" : undefined} dimColor={!msg.error}>
+              {"  "}⎿  {msg.result}
             </Text>
           ) : null}
         </Box>
       );
+
     case "agents":
       return (
-        <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} marginY={0}>
-          <Text color="cyan" bold>
-            orchestrate · {msg.items.length} agents
-          </Text>
+        <Box flexDirection="column" marginLeft={2} marginBottom={0}>
           {msg.items.map((a, i) => (
             <Text key={i} dimColor>
-              [{i + 1}] {a.description} · {a.status}
+              ⎿  {a.status === "running" ? "…" : "✓"} {a.description.slice(0, 80)}
             </Text>
           ))}
         </Box>
       );
+
     case "status":
       return (
-        <Text dimColor>
-          ✽ {msg.text}
-        </Text>
+        <Box marginBottom={1}>
+          <Text dimColor>{msg.text}</Text>
+        </Box>
       );
+
     default:
-      return null;
+      return <Text />;
   }
 }

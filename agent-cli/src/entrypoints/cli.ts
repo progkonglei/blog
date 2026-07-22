@@ -48,7 +48,7 @@ program
       console.error(
         "No API key found. Create agent-cli/.env with:\n  AGENT_PROVIDER=deepseek\n  DEEPSEEK_API_KEY=sk-...\n(see agent-cli/.env.example)",
       );
-    } else {
+    } else if (opts.print !== undefined || promptParts.join(" ").trim() || opts.legacyUi || process.env.AGENT_VERBOSE === "1") {
       const provider =
         process.env.AGENT_PROVIDER ||
         (process.env.DEEPSEEK_API_KEY ? "deepseek" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "openai");
@@ -89,6 +89,11 @@ program
         enableMcp,
       });
       return;
+    }
+
+    // 进入 Ink 前少打日志，避免和 TUI 抢屏（详细路径写在 docs/runs）
+    if (process.env.AGENT_VERBOSE === "1") {
+      console.error(`[agent-cli] ink tui · ${permissionMode}`);
     }
 
     const { runInkRepl } = await import("../ui/ink/runInkRepl.js");

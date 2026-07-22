@@ -1,5 +1,5 @@
 /**
- * 启动 Ink TUI REPL
+ * 启动 Ink TUI — Claude Code 风格 transcript UI
  */
 import React from "react";
 import { render } from "ink";
@@ -13,7 +13,6 @@ export async function runInkRepl(opts: {
   resume?: string;
   enableMcp: boolean;
 }): Promise<void> {
-  // Ink 暂无模态权限框：default → 按 acceptEdits 跑，避免卡死
   const mode: PermissionMode =
     opts.permissionMode === "default" ? "acceptEdits" : opts.permissionMode;
 
@@ -26,9 +25,12 @@ export async function runInkRepl(opts: {
 
   await engine.init(opts.resume);
 
-  const instance = render(
-    <InkApp engine={engine} cwd={opts.cwd} mode={mode} />,
-  );
+  // 清掉入口里 console.error 造成的「脏屏」感：换行后进入干净 transcript
+  process.stdout.write("\n");
+
+  const instance = render(<InkApp engine={engine} cwd={opts.cwd} mode={mode} />, {
+    exitOnCtrlC: true,
+  });
 
   await instance.waitUntilExit();
   await engine.dispose();
