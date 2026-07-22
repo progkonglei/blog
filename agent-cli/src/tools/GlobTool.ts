@@ -1,3 +1,4 @@
+/** Glob：按通配符查找文件路径（只读） */
 import { z } from "zod";
 import { glob } from "glob";
 import { defineTool } from "./Tool.js";

@@ -1,3 +1,9 @@
+/**
+ * QueryEngine —— 会话引擎门面
+ *
+ * Claude Code 模式：REPL、-p/--print、子代理都走同一套引擎。
+ * 负责：装载系统提示 / 工具 / MCP / 会话持久化，然后把用户输入交给 queryLoop。
+ */
 import type { Message, PermissionMode, StreamEvent, TerminalReason } from "../types/messages.js";
 import type { ToolDefinition, ToolContext } from "../tools/Tool.js";
 import { runQueryLoop } from "./queryLoop.js";
@@ -18,19 +24,17 @@ export type QueryEngineOptions = {
   enableMcp?: boolean;
 };
 
-/**
- * QueryEngine — single entry used by REPL and --print (Claude Code pattern:
- * one loop for all interfaces).
- */
 export class QueryEngine {
   readonly cwd: string;
   readonly permissionMode: PermissionMode;
   private askPermission: ToolContext["askPermission"];
+  /** 当前会话的完整消息历史（内存中） */
   private messages: Message[] = [];
   private tools: ToolDefinition[] = [];
   private systemPrompt = "";
   private session: SessionStore | null = null;
   private closeMcp: (() => Promise<void>) | null = null;
+  /** 按环境变量选择 DeepSeek / Anthropic / OpenAI */
   private modelCall = createModelCall();
   private maxTurns: number;
   private enableMcp: boolean;
@@ -45,6 +49,7 @@ export class QueryEngine {
     this.sessionDir = opts.sessionDir ?? path.join(opts.cwd, ".sessions");
   }
 
+  /** 初始化：系统提示、内置工具、MCP、会话文件 */
   async init(resumeSessionId?: string): Promise<void> {
     this.systemPrompt = await assembleSystemPrompt(this.cwd);
     this.tools = createBuiltinTools({ modelCall: this.modelCall });
@@ -56,6 +61,7 @@ export class QueryEngine {
     }
 
     if (resumeSessionId) {
+      // 从 JSONL 恢复历史（权限不恢复，需本会话重新确认）
       const file = path.join(this.sessionDir, `${resumeSessionId}.jsonl`);
       const opened = await SessionStore.open(file);
       this.session = opened.store;
@@ -73,10 +79,15 @@ export class QueryEngine {
     return this.messages;
   }
 
+  /** 清空内存中的对话（磁盘会话文件仍保留） */
   clear(): void {
     this.messages = [];
   }
 
+  /**
+   * 提交一轮用户输入，驱动查询循环。
+   * 调用方 for-await 消费 StreamEvent 即可。
+   */
   async *submit(userText: string, signal?: AbortSignal): AsyncGenerator<StreamEvent, TerminalReason> {
     const userMsg: Message = { role: "user", content: userText };
     this.messages.push(userMsg);
@@ -88,7 +99,7 @@ export class QueryEngine {
       askPermission: this.askPermission,
       signal,
       depth: 0,
-      maxDepth: 2,
+      maxDepth: 2, // 根 Agent 最多再嵌套 2 层子代理
     };
 
     const gen = runQueryLoop({
@@ -113,6 +124,7 @@ export class QueryEngine {
     return next.value;
   }
 
+  /** 释放 MCP 等外部连接 */
   async dispose(): Promise<void> {
     await this.closeMcp?.();
   }

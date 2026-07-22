@@ -1,3 +1,9 @@
+/**
+ * 终端 UI：交互 REPL 与 --print 无头模式
+ *
+ * 职责仅是渲染 StreamEvent + 处理权限询问 / 斜杠命令，
+ * 业务逻辑全部在 QueryEngine。
+ */
 import chalk from "chalk";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
@@ -5,6 +11,7 @@ import type { StreamEvent, TerminalReason } from "../types/messages.js";
 import { QueryEngine } from "../query/QueryEngine.js";
 import type { PermissionMode } from "../types/messages.js";
 
+/** 交互式多轮对话 */
 export async function runRepl(opts: {
   cwd: string;
   permissionMode: PermissionMode;
@@ -76,6 +83,7 @@ export async function runRepl(opts: {
   }
 }
 
+/** 单次任务无头模式（类似 Claude Code -p/--print） */
 export async function runPrint(opts: {
   cwd: string;
   permissionMode: PermissionMode;
@@ -108,6 +116,7 @@ export async function runPrint(opts: {
   }
 }
 
+/** 把查询循环事件打印到终端 */
 function renderEvent(ev: StreamEvent): void {
   switch (ev.type) {
     case "text_delta":

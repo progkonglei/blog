@@ -1,3 +1,4 @@
+/** Bash：在工作区内执行 Shell 命令（默认需用户确认） */
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import { defineTool } from "./Tool.js";
@@ -13,6 +14,7 @@ export const BashTool = defineTool({
     "Execute a shell command in the project working directory. Prefer targeted commands over broad ones. Output is truncated if very long.",
   inputSchema,
   isReadOnly: false,
+  // Shell 副作用大，默认一律询问
   checkPermission: async () => "ask" as const,
   async execute({ command, timeout_ms }, ctx) {
     const timeout = timeout_ms ?? 30_000;

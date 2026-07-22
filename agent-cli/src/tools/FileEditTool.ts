@@ -1,3 +1,4 @@
+/** Edit：精确字符串替换（优先于整文件 Write，改动更可控） */
 import { z } from "zod";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";

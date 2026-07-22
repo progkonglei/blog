@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 /**
- * Load env first via dynamic import so dotenv runs before QueryEngine/OpenAI client.
+ * CLI 入口（Commander）
+ *
+ * 关键点：先 loadAgentEnv()，再动态 import 业务模块，
+ * 保证创建 OpenAI/Anthropic 客户端前已读到 .env。
+ *
+ * 模式：
+ * - 无参数 → REPL
+ * - -p/--print 或直接跟 prompt → 无头单次执行
  */
 import { loadAgentEnv } from "../config/env.js";
 
@@ -53,6 +60,7 @@ program
     const enableMcp = opts.mcp !== false;
     const joined = promptParts.join(" ").trim();
 
+    // --print：无头单次
     if (opts.print !== undefined) {
       const prompt =
         typeof opts.print === "string" && opts.print.length > 0
@@ -63,6 +71,7 @@ program
       return;
     }
 
+    // 位置参数当 prompt：也走无头模式，方便脚本调用
     if (joined) {
       const code = await runPrint({ cwd, permissionMode, prompt: joined, enableMcp });
       process.exitCode = code;
