@@ -1,0 +1,42 @@
+﻿厂商,模型,档位,类型,上下文,参考价格(输入/输出 $/M tokens),主要优点,主要缺点,更适合,备注
+OpenAI,GPT-5.6 Sol,旗舰,闭源 API,~1M,约 5 / 30,综合/Agent/STEM 最强档；max 推理；Ultra 多智能体,最贵；配额紧,最难任务、Agent、科研,2026-07-09 GA
+OpenAI,GPT-5.6 Terra,均衡,闭源 API,~1M,约 2.5 / 15,接近上代旗舰，价格约一半,极限推理不如 Sol,日常生产默认,
+OpenAI,GPT-5.6 Luna,高速廉价,闭源 API,~1.1M,约 1 / 6,最快最便宜；长上下文,深度推理弱一档,高并发、低延迟,
+OpenAI,GPT-5.5 / Pro,上代旗舰,闭源 API,400K–1M,约 5 / 30,终端/CLI Agent、全模态仍强,已被 5.6 取代定位,存量系统、Codex,2026-04-23
+OpenAI,GPT-4o,旧代,闭源 API,128K,较低,便宜、生态成熟,能力落后,老项目缓冲,
+OpenAI,GPT-4o-mini,旧代轻量,闭源 API,128K,很低,极低成本,上限低,分类/抽取,
+Anthropic,Claude Fable 5,超旗舰(Mythos),闭源 API,1M,约 10 / 50,编码/正确性顶尖；幻觉控制好,贵；供应敏感,高风险代码,claude-fable-5
+Anthropic,Claude Mythos 5,受限旗舰,闭源 API,1M,高,与 Fable 同级,仅合作伙伴,企业专属,Glasswing
+Anthropic,Claude Opus 4.8,旗舰,闭源 API,1M,约 5 / 25,综合智能、Agent 编码、电脑操控,贵,复杂 Agent,claude-opus-4-8
+Anthropic,Claude Opus 4.7,上代旗舰,闭源 API,1M,约同 Opus,仍强,不如 4.8,存量,
+Anthropic,Claude Sonnet 5,均衡,闭源 API,200K–1M,促销约 2/10→3/15,接近 Opus，性价比高,极限不如 Opus/Fable,写代码默认,claude-sonnet-5
+Anthropic,Claude Sonnet 4.6,上代均衡,闭源 API,200K–1M,约 3 / 15,稳,不如 Sonnet 5,存量,
+Anthropic,Claude Haiku 4.5,轻量,闭源 API,200K,约 1 / 5,快、便宜,深度弱,分类/路由,
+Google,Gemini 3.5 Pro (Deep Think),旗舰,闭源 API,~2M,约 15 / 60,超长上下文、深度推理、多模态,贵；部分 rollout,超长材料,
+Google,Gemini 3.1 Pro,主力旗舰,闭源 API,1M,约 2 / 4–12,性价比高；理科/多模态,长上下文回忆偶弱,多模态默认,
+Google,Gemini 3.5 Flash,高速,闭源 API,1M,约 1.5 / 9,快；Agent/工具强,极限推理不如 Pro,高频 Agent,2026-05-19
+Google,Gemini Flash-Lite,超廉价,闭源 API,较短,很低,极低成本,上限低,批量任务,
+Google,Gemma 3,开源小模型,开源,视版本,自托管,可本地,非前沿,端侧,
+Google,Nano Banana 2 等,专用模态,闭源专项,—,按产品,生图等,非通用 LLM,图像,
+xAI,Grok 4.5,旗舰,闭源 API,500K,视套餐,实时信息；前沿对话/编码,企业生态较弱,热点对话,2026-07-08
+xAI,Grok 4.3,性价比,闭源 API,1M,约 1.25 / 2.5,便宜前沿；工具调用,综合略落后,预算前沿,
+xAI,Grok 4.20 Heavy,多智能体,闭源 API,最高 1M,偏订阅,多 Agent 重推理,贵,复杂多步,
+xAI,Grok Build 0.1,编程专用,闭源专项,—,视产品,Agent 写代码,非通用主力,编码 Agent,
+xAI,Composer 2.5,编程专用,闭源专项,—,视产品,快速编码 Agent,非通用,Grok Build 内,
+Meta,Muse Spark 1.1,闭源旗舰,闭源 API,1M,API/预览,多模态+Agent,不开源；生态新,meta.ai / API,2026-07-09
+Meta,Llama 4 Maverick,开源通用,开源 MoE,1M,自托管,多模态可私有化,运维自担,私有化,
+Meta,Llama 4 Scout,开源超长上下文,开源 MoE,10M,自托管,公开最长上下文,智能不如闭源旗舰,超大 RAG,
+Meta,Llama 3.3 70B 等,开源旧代,开源,128K,自托管,社区成熟,已落后,存量,
+Mistral,Mistral Medium 3.5,旗舰,开源/API,256K,视 API,稠密多能力合一,上限不如美厂旗舰,欧盟合规,2026-04-28
+Mistral,Mistral Large 3,开源 MoE,开源,256K,约 0.5 / 1.5,Apache 2.0 性价比,非最顶尖,西方商用开源,
+Mistral,Magistral,推理线,开源/API,—,视版本,偏推理,通用非最强,数学逻辑,
+Mistral,Ministral,端侧,开源,—,自托管,小快,能力有限,边缘,
+Mistral,Codestral,代码专用,API/专项,—,视产品,补全友好,非通用,IDE 补全,
+AWS,Amazon Nova Pro,企业旗舰,闭源 API,视版本,AWS 计价,深绑 AWS,心智份额较低,AWS 企业,
+AWS,Amazon Nova Lite/Micro,轻量,闭源 API,视版本,低,便宜低延迟,上限低,高并发简单任务,
+Cohere,Command R+,企业 RAG,闭源 API,视版本,视套餐,RAG/引用强,通用较弱,知识库问答,
+Cohere,Command R,企业 RAG,闭源 API,视版本,更低,实用便宜,通用一般,检索增强,
+Microsoft,Phi-4 系列,小模型,开源/小模型,视版本,自托管,小模型质量高,非旗舰,端侧低成本,
+NVIDIA,Nemotron 3 Ultra,开源大模型,开源,—,自托管,许可宽松,部署重,商用开源,~550B
+IBM,Granite,企业,开源/企业,视版本,视产品,合规叙事清晰,消费级弱,强监管行业,
+TII,Falcon 系列,开源,开源,视版本,自托管,部分语种选择,生态小,研究/特定语种,阿联酋
