@@ -1,3 +1,10 @@
+/**
+ * 上下文自动压缩（简化版）
+ *
+ * Claude Code 有 5 层压缩管线；这里只做一层：
+ * 超出字符阈值 → 保留首条 + 尾部若干条 → 中间用模型摘要替换。
+ * 目的：长会话不撑爆上下文窗口。
+ */
 import type { Message, StreamEvent } from "../../types/messages.js";
 import type { ModelRequest, ModelResponse } from "../../query/queryLoop.js";
 
@@ -12,10 +19,6 @@ function estimateChars(messages: Message[]): number {
   return JSON.stringify(messages).length;
 }
 
-/**
- * Simplified compaction pipeline (Claude Code has 5 layers).
- * Here: budget check → single auto-compact summary when over threshold.
- */
 export async function maybeCompact(
   messages: Message[],
   opts: {
@@ -30,7 +33,7 @@ export async function maybeCompact(
   if (before < opts.thresholdChars) return null;
   if (messages.length < 6) return null;
 
-  // Keep first user message + summarize the middle + keep last 2 turns
+  // 保留头部目标 + 最近几轮，中间做成 transcript 再摘要
   const head = messages.slice(0, 1);
   const tail = messages.slice(-4);
   const middle = messages.slice(1, -4);
@@ -58,7 +61,7 @@ export async function maybeCompact(
       system:
         "Summarize this agent transcript for future context. Preserve goals, key decisions, file paths touched, and unfinished work. Be concise.",
       messages: [{ role: "user", content: transcript }],
-      tools: [],
+      tools: [], // 压缩时不开放工具
       signal: opts.signal,
     });
     let next = await gen.next();

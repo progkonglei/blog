@@ -1,3 +1,4 @@
+/** Write：创建或覆盖写入文件（acceptEdits / bypass 下可自动批准） */
 import { z } from "zod";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";

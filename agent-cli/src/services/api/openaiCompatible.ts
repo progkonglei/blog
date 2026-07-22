@@ -1,3 +1,9 @@
+/**
+ * OpenAI 兼容协议客户端（DeepSeek / OpenAI / 本地网关）
+ *
+ * DeepSeek 默认：baseURL=https://api.deepseek.com，model=deepseek-chat
+ * 内部统一消息格式 ↔ OpenAI chat.completions（含 tool_calls）互转。
+ */
 import OpenAI from "openai";
 import type {
   ChatCompletionMessageParam,
@@ -6,10 +12,6 @@ import type {
 import type { ContentBlock, Message, StreamEvent, ToolUseBlock } from "../../types/messages.js";
 import type { ModelRequest, ModelResponse } from "../../query/queryLoop.js";
 
-/**
- * OpenAI-compatible provider (DeepSeek, OpenAI, local gateways).
- * DeepSeek: baseURL https://api.deepseek.com , model deepseek-chat
- */
 export function createOpenAICompatibleModelCall(opts?: {
   apiKey?: string;
   model?: string;
@@ -33,10 +35,11 @@ export function createOpenAICompatibleModelCall(opts?: {
   const model =
     opts?.model ?? process.env.OPENAI_MODEL ?? process.env.DEEPSEEK_MODEL ?? "deepseek-chat";
 
-  // Pass apiKey explicitly so the SDK does not look for OPENAI_API_KEY only.
+  // 必须显式传入 apiKey，否则 SDK 只会找 OPENAI_API_KEY 并抛误导性错误
   const client = new OpenAI({ apiKey, baseURL });
 
   return async function* modelCall(req: ModelRequest): AsyncGenerator<StreamEvent, ModelResponse> {
+    // 我们的 input_schema → OpenAI function.parameters
     const tools: ChatCompletionTool[] | undefined = req.tools.length
       ? req.tools.map((t) => ({
           type: "function",
@@ -61,6 +64,7 @@ export function createOpenAICompatibleModelCall(opts?: {
     );
 
     let text = "";
+    // 流式 tool_calls 按 index 累积 arguments 字符串
     const toolAcc = new Map<
       number,
       { id: string; name: string; arguments: string }
@@ -91,6 +95,7 @@ export function createOpenAICompatibleModelCall(opts?: {
       }
     }
 
+    // 组装内部 ContentBlock，供 queryLoop 继续跑工具
     const content: ContentBlock[] = [];
     if (text) content.push({ type: "text", text });
 
@@ -121,6 +126,7 @@ export function createOpenAICompatibleModelCall(opts?: {
   };
 }
 
+/** 内部 Message[] → OpenAI ChatCompletionMessageParam[]（含 tool / tool_calls） */
 function toOpenAIMessages(system: string, messages: Message[]): ChatCompletionMessageParam[] {
   const out: ChatCompletionMessageParam[] = [{ role: "system", content: system }];
 

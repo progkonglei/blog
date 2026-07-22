@@ -1,3 +1,4 @@
+/** Grep：内容搜索（优先 ripgrep，不可用时 Node 回退） */
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import { defineTool } from "./Tool.js";

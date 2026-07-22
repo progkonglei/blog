@@ -1,10 +1,12 @@
+/**
+ * 系统提示装配
+ *
+ * 基础身份说明 + 向上查找 CLAUDE.md / AGENTS.md / .agent-cli.md
+ * （Claude Code 会沿目录树加载项目指令）
+ */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-/**
- * Assemble system prompt from identity + CLAUDE.md / AGENTS.md hierarchy
- * (Claude Code loads CLAUDE.md from cwd upward).
- */
 export async function assembleSystemPrompt(cwd: string): Promise<string> {
   const identity = [
     "You are agent-cli, a Claude Code–inspired coding agent running in the terminal.",
@@ -18,13 +20,13 @@ export async function assembleSystemPrompt(cwd: string): Promise<string> {
   return `${identity}\n\n# Project instructions\n${memoryFiles}`;
 }
 
+/** 从 cwd 向上最多 4 层收集指令文件 */
 async function loadInstructionFiles(cwd: string): Promise<string | null> {
   const names = ["CLAUDE.md", "AGENTS.md", ".agent-cli.md"];
   const chunks: string[] = [];
   let dir = path.resolve(cwd);
   const root = path.parse(dir).root;
 
-  // Walk up a few levels (project → parents), Claude Code style
   for (let i = 0; i < 4; i++) {
     for (const name of names) {
       try {
@@ -32,7 +34,7 @@ async function loadInstructionFiles(cwd: string): Promise<string | null> {
         const text = await readFile(p, "utf8");
         chunks.push(`## ${path.relative(cwd, p) || name}\n${text.trim()}`);
       } catch {
-        // missing ok
+        // 文件不存在则跳过
       }
     }
     const parent = path.dirname(dir);

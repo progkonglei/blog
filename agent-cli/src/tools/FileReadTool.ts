@@ -1,3 +1,4 @@
+/** Read：读取工作区内文本文件（可按行切片），只读自动放行 */
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import path from "node:path";

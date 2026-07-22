@@ -1,9 +1,14 @@
+/**
+ * 会话持久化（Append-only JSONL）
+ *
+ * Claude Code 风格：只追加、不改写，便于审计与 resume。
+ * 注意：恢复会话时不恢复权限批准状态，信任需本会话重新建立。
+ */
 import { appendFile, mkdir, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Message } from "../types/messages.js";
 
-/** Append-only JSONL session store — Claude Code persistence pattern. */
 export class SessionStore {
   readonly sessionId: string;
   readonly filePath: string;
@@ -13,6 +18,7 @@ export class SessionStore {
     this.filePath = filePath;
   }
 
+  /** 创建新会话文件，写入 session_start 事件 */
   static async create(dir: string, sessionId = randomUUID()): Promise<SessionStore> {
     await mkdir(dir, { recursive: true });
     const filePath = path.join(dir, `${sessionId}.jsonl`);
@@ -21,6 +27,7 @@ export class SessionStore {
     return store;
   }
 
+  /** 打开已有会话并重建消息列表 */
   static async open(filePath: string): Promise<{ store: SessionStore; messages: Message[] }> {
     const sessionId = path.basename(filePath, ".jsonl");
     const store = new SessionStore(sessionId, filePath);

@@ -1,10 +1,15 @@
+/**
+ * 权限门控
+ *
+ * 简化版 Claude Code「拒绝优先 + 渐进信任」：
+ * bypassPermissions → 全放行
+ * 工具自身 checkPermission → allow/deny/ask
+ * acceptEdits → 自动批准非 Bash 的写操作
+ * 否则 → 询问用户
+ */
 import type { ToolContext, ToolDefinition } from "../tools/Tool.js";
 import type { PermissionDecision } from "../types/messages.js";
 
-/**
- * Deny-first / graduated trust — simplified Claude Code permission gate.
- * Modes: default (ask for writes), acceptEdits (auto file edits), bypassPermissions (all auto).
- */
 export async function gateToolPermission(
   tool: ToolDefinition,
   input: Record<string, unknown>,
@@ -22,7 +27,7 @@ export async function gateToolPermission(
   if (decision === "allow") return true;
   if (decision === "deny") return false;
 
-  // acceptEdits: auto-approve non-bash edits
+  // acceptEdits：文件编辑自动过，Shell 仍走询问（副作用更大）
   if (ctx.permissionMode === "acceptEdits" && tool.name !== "Bash") {
     return true;
   }

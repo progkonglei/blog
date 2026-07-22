@@ -1,7 +1,14 @@
+/**
+ * Anthropic Messages API 客户端 + MOCK_LLM 假模型
+ *
+ * 流式解析 text / tool_use，转换成内部 StreamEvent / ModelResponse。
+ * MOCK_LLM=1 时不发真实请求，便于离线冒烟。
+ */
 import Anthropic from "@anthropic-ai/sdk";
 import type { ContentBlock, Message, StreamEvent, ToolUseBlock } from "../../types/messages.js";
 import type { ModelRequest, ModelResponse } from "../../query/queryLoop.js";
 
+/** 内部消息 → Anthropic MessageParam */
 function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
   return messages
     .filter((m) => m.role === "user" || m.role === "assistant")
@@ -137,7 +144,7 @@ export function createAnthropicModelCall(opts?: {
   };
 }
 
-/** Deterministic offline mock for smoke tests / CI without API keys. */
+/** 离线确定性假模型：第一次调 Glob，收到 tool_result 后结束 */
 async function* mockModelCall(req: ModelRequest): AsyncGenerator<StreamEvent, ModelResponse> {
   const last = req.messages[req.messages.length - 1];
   const text =
