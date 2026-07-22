@@ -43,14 +43,39 @@ export function createBuiltinTools(opts: {
 export function toolsToAnthropic(tools: ToolDefinition[]) {
   return tools.map((t) => {
     const json = zodToJsonSchema(t.inputSchema, {
-      target: "openApi3",
+      // jsonSchema7 avoids OpenAPI boolean exclusiveMinimum (DeepSeek/OpenAI reject those)
+      target: "jsonSchema7",
       $refStrategy: "none",
     }) as Record<string, unknown>;
     delete json.$schema;
+    // Ensure top-level object schema
+    if (!json.type) json.type = "object";
     return {
       name: t.name,
       description: t.description,
-      input_schema: json,
+      input_schema: sanitizeForFunctionCalling(json),
     };
   });
+}
+
+/** Strip fields some OpenAI-compatible providers reject. */
+function sanitizeForFunctionCalling(schema: Record<string, unknown>): Record<string, unknown> {
+  const clone = JSON.parse(JSON.stringify(schema)) as unknown;
+  walk(clone);
+  return clone as Record<string, unknown>;
+
+  function walk(node: unknown): void {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    for (const key of ["exclusiveMinimum", "exclusiveMaximum"]) {
+      if (typeof obj[key] === "boolean") delete obj[key];
+    }
+    // DeepSeek is picky about unsupported keywords
+    delete obj.$schema;
+    for (const v of Object.values(obj)) walk(v);
+  }
 }
