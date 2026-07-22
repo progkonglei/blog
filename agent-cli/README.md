@@ -15,6 +15,7 @@ Educational **TypeScript coding-agent CLI** inspired by [Claude Code](https://do
 | CLAUDE.md / AGENTS.md assembly | `src/context/assemble.ts` |
 | Append-only JSONL sessions | `src/session/SessionStore.ts` |
 | MCP stdio tools | `src/services/mcp/client.ts` |
+| LLM request local logs | `src/services/debug/llmRequestLog.ts` |
 | `--print` headless mode | CLI `-p` |
 
 ## Quick start
@@ -41,6 +42,19 @@ MOCK_LLM=1 npm run dev -- -p "hello"
 ```
 
 Supported providers via `AGENT_PROVIDER`: `deepseek` | `openai` | `anthropic` (auto-detects from env keys).
+
+## LLM 请求日志
+
+默认开启：每次调用大模型都会把 `system` / `messages` / `tools` 写到本地：
+
+```text
+.sessions/llm-logs/<sessionId>/
+  requests.jsonl       # 索引
+  0001-request.json    # 完整请求
+  0001-response.json   # 模型返回
+```
+
+关闭：`AGENT_LLM_LOG=0`。自定义目录：`AGENT_LLM_LOG_DIR=...`。
 
 ## Built-in tools
 
@@ -72,7 +86,8 @@ src/
   context/               # System prompt / CLAUDE.md
   session/               # JSONL persistence
   services/
-    api/                 # Anthropic streaming client (+ MOCK_LLM)
+    api/                 # 模型提供商（DeepSeek/Anthropic/OpenAI）
+    debug/               # LLM 请求落盘
     compact/             # Auto-compact
     mcp/                 # MCP client
   ui/repl.ts             # Terminal REPL / print renderer

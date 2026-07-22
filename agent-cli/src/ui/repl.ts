@@ -42,6 +42,9 @@ export async function runRepl(opts: {
 
   console.log(chalk.cyan(`agent-cli  session=${engine.sessionId}`));
   console.log(chalk.dim(`cwd=${opts.cwd}  mode=${opts.permissionMode}`));
+  if (engine.llmLogDir) {
+    console.log(chalk.dim(`llm-log=${engine.llmLogDir}`));
+  }
   console.log(chalk.dim("Commands: /help /clear /exit  |  Ctrl+C to abort turn\n"));
 
   try {
@@ -99,6 +102,10 @@ export async function runPrint(opts: {
     enableMcp: opts.enableMcp,
   });
   await engine.init();
+
+  if (engine.llmLogDir) {
+    console.error(`[agent-cli] llm-log=${engine.llmLogDir}`);
+  }
 
   try {
     const gen = engine.submit(opts.prompt);

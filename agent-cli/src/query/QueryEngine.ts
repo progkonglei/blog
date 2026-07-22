@@ -7,11 +7,12 @@
 import type { Message, PermissionMode, StreamEvent, TerminalReason } from "../types/messages.js";
 import type { ToolDefinition, ToolContext } from "../tools/Tool.js";
 import { runQueryLoop } from "./queryLoop.js";
-import { createModelCall } from "../services/api/provider.js";
+import { createModelCall, type ModelCaller } from "../services/api/provider.js";
 import { createBuiltinTools } from "../tools/registry.js";
 import { assembleSystemPrompt } from "../context/assemble.js";
 import { loadMcpTools } from "../services/mcp/client.js";
 import { SessionStore } from "../session/SessionStore.js";
+import { LlmRequestLogger, resolveLlmLogDir } from "../services/debug/llmRequestLog.js";
 import path from "node:path";
 
 export type QueryEngineOptions = {
@@ -34,8 +35,8 @@ export class QueryEngine {
   private systemPrompt = "";
   private session: SessionStore | null = null;
   private closeMcp: (() => Promise<void>) | null = null;
-  /** 按环境变量选择 DeepSeek / Anthropic / OpenAI */
-  private modelCall = createModelCall();
+  private modelCall: ModelCaller = createModelCall();
+  private llmLogger: LlmRequestLogger | null = null;
   private maxTurns: number;
   private enableMcp: boolean;
   private sessionDir: string;
@@ -49,19 +50,10 @@ export class QueryEngine {
     this.sessionDir = opts.sessionDir ?? path.join(opts.cwd, ".sessions");
   }
 
-  /** 初始化：系统提示、内置工具、MCP、会话文件 */
+  /** 初始化：会话 → 请求日志包装 → 系统提示 / 工具 / MCP */
   async init(resumeSessionId?: string): Promise<void> {
-    this.systemPrompt = await assembleSystemPrompt(this.cwd);
-    this.tools = createBuiltinTools({ modelCall: this.modelCall });
-
-    if (this.enableMcp) {
-      const mcp = await loadMcpTools(this.cwd);
-      this.tools = [...this.tools, ...mcp.tools];
-      this.closeMcp = mcp.close;
-    }
-
+    // 先建会话，拿到 sessionId，再挂 LLM 请求日志目录
     if (resumeSessionId) {
-      // 从 JSONL 恢复历史（权限不恢复，需本会话重新确认）
       const file = path.join(this.sessionDir, `${resumeSessionId}.jsonl`);
       const opened = await SessionStore.open(file);
       this.session = opened.store;
@@ -69,10 +61,30 @@ export class QueryEngine {
     } else {
       this.session = await SessionStore.create(this.sessionDir);
     }
+
+    // 每次传给大模型的 messages 落盘（含子代理 / compact 调用）
+    const logDir = resolveLlmLogDir(this.cwd, this.session.sessionId);
+    this.llmLogger = new LlmRequestLogger({ dir: logDir });
+    this.modelCall = this.llmLogger.wrap(createModelCall());
+
+    this.systemPrompt = await assembleSystemPrompt(this.cwd);
+    // 工具（含 Agent）必须用包装后的 modelCall，子代理请求才会被记录
+    this.tools = createBuiltinTools({ modelCall: this.modelCall });
+
+    if (this.enableMcp) {
+      const mcp = await loadMcpTools(this.cwd);
+      this.tools = [...this.tools, ...mcp.tools];
+      this.closeMcp = mcp.close;
+    }
   }
 
   get sessionId(): string | undefined {
     return this.session?.sessionId;
+  }
+
+  /** LLM 请求日志目录（未启用时为 undefined） */
+  get llmLogDir(): string | undefined {
+    return this.llmLogger?.enabled ? this.llmLogger.dir : undefined;
   }
 
   get history(): Message[] {
