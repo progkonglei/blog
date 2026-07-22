@@ -22,7 +22,13 @@ Educational **TypeScript coding-agent CLI** inspired by [Claude Code](https://do
 ```bash
 cd agent-cli
 npm install
-cp .env.example .env   # set ANTHROPIC_API_KEY
+cp .env.example .env
+# DeepSeek（推荐）:
+#   AGENT_PROVIDER=deepseek
+#   DEEPSEEK_API_KEY=sk-...
+# Anthropic:
+#   AGENT_PROVIDER=anthropic
+#   ANTHROPIC_API_KEY=sk-ant-...
 
 # Interactive REPL
 npm run dev
@@ -33,6 +39,8 @@ npm run dev -- -p "List TypeScript files and summarize package.json" --permissio
 # Offline smoke (no API key)
 MOCK_LLM=1 npm run dev -- -p "hello"
 ```
+
+Supported providers via `AGENT_PROVIDER`: `deepseek` | `openai` | `anthropic` (auto-detects from env keys).
 
 ## Built-in tools
 

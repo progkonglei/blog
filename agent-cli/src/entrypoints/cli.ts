@@ -1,8 +1,15 @@
 #!/usr/bin/env node
-import { Command } from "commander";
-import path from "node:path";
-import { runPrint, runRepl } from "../ui/repl.js";
-import type { PermissionMode } from "../types/messages.js";
+/**
+ * Load env first via dynamic import so dotenv runs before QueryEngine/OpenAI client.
+ */
+import { loadAgentEnv } from "../config/env.js";
+
+const loaded = loadAgentEnv();
+
+const { Command } = await import("commander");
+const path = await import("node:path");
+const { runPrint, runRepl } = await import("../ui/repl.js");
+type PermissionMode = import("../types/messages.js").PermissionMode;
 
 function parseMode(raw?: string): PermissionMode {
   const v = (raw ?? process.env.AGENT_PERMISSION_MODE ?? "default") as PermissionMode;
@@ -27,12 +34,25 @@ program
   .option("--no-mcp", "Disable MCP tool loading")
   .argument("[prompt...]", "Optional initial prompt (REPL still starts unless --print)")
   .action(async (promptParts: string[], opts) => {
+    const hasKey = Boolean(
+      process.env.DEEPSEEK_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY,
+    );
+    if (!hasKey && process.env.MOCK_LLM !== "1") {
+      console.error(
+        "No API key found. Create agent-cli/.env with:\n  AGENT_PROVIDER=deepseek\n  DEEPSEEK_API_KEY=sk-...\n(see agent-cli/.env.example)",
+      );
+    } else {
+      const provider =
+        process.env.AGENT_PROVIDER ||
+        (process.env.DEEPSEEK_API_KEY ? "deepseek" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "openai");
+      console.error(`[agent-cli] provider=${provider}${loaded[0] ? ` env=${loaded[0]}` : ""}`);
+    }
+
     const cwd = path.resolve(opts.cwd as string);
     const permissionMode = parseMode(opts.permissionMode as string);
     const enableMcp = opts.mcp !== false;
     const joined = promptParts.join(" ").trim();
 
-    // --print with optional prompt from flag or args
     if (opts.print !== undefined) {
       const prompt =
         typeof opts.print === "string" && opts.print.length > 0
@@ -44,7 +64,6 @@ program
     }
 
     if (joined) {
-      // One-shot then exit (convenience)
       const code = await runPrint({ cwd, permissionMode, prompt: joined, enableMcp });
       process.exitCode = code;
       return;
