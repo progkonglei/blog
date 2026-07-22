@@ -1,28 +1,28 @@
 /**
- * 终端 UI：交互 REPL 与 --print 无头模式
+ * 终端 UI —— 对齐 Claude Code CLI 的观感
  *
- * 渲染原则：
- * 1. 回合之间用分隔线，避免糊成一片
- * 2. 工具调用用「卡片」块（开始 / 结果），正文单独成流
- * 3. 元数据变淡，成功/失败用色区分
+ * - 输入：边框 prompt 框
+ * - 工具：● Tool(args) + ⎿ 结果，执行中 spinner
+ * - 助手正文：干净流式输出，少边框噪音
+ * - 阶段事件：默认不刷屏（细节在 exec-logs）
  */
-import chalk from "chalk";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import type { StreamEvent, TerminalReason } from "../types/messages.js";
 import { QueryEngine } from "../query/QueryEngine.js";
 import type { PermissionMode } from "../types/messages.js";
-import { banner, helpPanel, preview, theme } from "./theme.js";
-
-type RenderState = {
-  /** 当前是否在输出助手正文（用于工具卡片前后换行） */
-  inText: boolean;
-  toolCount: number;
-};
-
-function freshState(): RenderState {
-  return { inText: false, toolCount: 0 };
-}
+import { banner, helpPanel, theme } from "./theme.js";
+import { permissionBox, promptBox } from "./prompt.js";
+import {
+  ensureTextClosed,
+  finishTool,
+  freshToolUi,
+  startToolSpinner,
+  stopAllSpinners,
+  writeAssistantDelta,
+  writeThinking,
+  type ToolUiState,
+} from "./tools.js";
 
 /** 交互式多轮对话 */
 export async function runRepl(opts: {
@@ -37,15 +37,7 @@ export async function runRepl(opts: {
     toolName: string,
     toolInput: Record<string, unknown>,
     reason: string,
-  ): Promise<boolean> => {
-    console.log();
-    console.log(theme.warn("╭─ permission ─────────────────────────────"));
-    console.log(theme.warn(`│ allow ${chalk.bold(toolName)}?`) + theme.muted(`  (${reason})`));
-    console.log(theme.warn("│") + theme.soft(` ${preview(JSON.stringify(toolInput), 64)}`));
-    console.log(theme.warn("╰───────────────────────────────────────────"));
-    const answer = await rl.question(theme.warn("  [y/N] "));
-    return /^y(es)?$/i.test(answer.trim());
-  };
+  ): Promise<boolean> => permissionBox(rl, toolName, toolInput, reason);
 
   const engine = new QueryEngine({
     cwd: opts.cwd,
@@ -65,10 +57,10 @@ export async function runRepl(opts: {
 
   try {
     while (true) {
-      const line = (await rl.question(theme.user("› "))).trim();
+      const line = await promptBox(rl);
       if (!line) continue;
       if (line === "/exit" || line === "/quit") {
-        console.log(theme.muted("\nbye.\n"));
+        console.log(theme.muted("\nbye\n"));
         break;
       }
       if (line === "/help") {
@@ -77,7 +69,7 @@ export async function runRepl(opts: {
       }
       if (line === "/clear") {
         engine.clear();
-        console.log(theme.muted("  context cleared (session file kept)\n"));
+        console.log(theme.muted("context cleared\n"));
         continue;
       }
 
@@ -85,21 +77,20 @@ export async function runRepl(opts: {
       const onSig = () => ac.abort();
       process.once("SIGINT", onSig);
 
-      const state = freshState();
+      const state = freshToolUi();
       try {
         console.log();
-        console.log(theme.muted("╭─ assistant"));
         const gen = engine.submit(line, ac.signal);
         let next = await gen.next();
         while (!next.done) {
           renderEvent(next.value, state);
           next = await gen.next();
         }
-        ensureNewline(state);
+        ensureTextClosed(state);
         renderTerminal(next.value);
-        console.log(theme.muted("╰─"));
         console.log();
       } finally {
+        stopAllSpinners(state);
         process.removeListener("SIGINT", onSig);
       }
     }
@@ -109,7 +100,7 @@ export async function runRepl(opts: {
   }
 }
 
-/** 单次任务无头模式（类似 Claude Code -p/--print） */
+/** 单次任务无头模式 */
 export async function runPrint(opts: {
   cwd: string;
   permissionMode: PermissionMode;
@@ -124,132 +115,64 @@ export async function runPrint(opts: {
   });
   await engine.init();
 
-  if (engine.llmLogDir) console.error(theme.muted(`[llm-log] ${engine.llmLogDir}`));
-  if (engine.execLogDir) console.error(theme.muted(`[exec-log] ${engine.execLogDir}`));
+  if (engine.llmLogDir) console.error(theme.muted(`llm-log  ${engine.llmLogDir}`));
+  if (engine.execLogDir) console.error(theme.muted(`exec-log ${engine.execLogDir}`));
+  console.log();
 
-  const state = freshState();
+  const state = freshToolUi();
   try {
-    console.log(theme.muted("╭─ assistant"));
     const gen = engine.submit(opts.prompt);
     let next = await gen.next();
     while (!next.done) {
       renderEvent(next.value, state);
       next = await gen.next();
     }
-    ensureNewline(state);
+    ensureTextClosed(state);
     renderTerminal(next.value);
-    console.log(theme.muted("╰─"));
     console.log();
     return next.value.kind === "error" ? 1 : 0;
   } finally {
+    stopAllSpinners(state);
     await engine.dispose();
   }
 }
 
-function ensureNewline(state: RenderState): void {
-  if (state.inText) {
-    process.stdout.write("\n");
-    state.inText = false;
-  }
-}
-
-/** 把查询循环事件打印到终端 */
-function renderEvent(ev: StreamEvent, state: RenderState): void {
+/** 把查询循环事件画到终端 */
+function renderEvent(ev: StreamEvent, state: ToolUiState): void {
   switch (ev.type) {
-    case "text_delta": {
-      const text = ev.text;
-      if (!text) break;
-      if (!state.inText) {
-        // 跳过纯开头换行，避免空 │ 行
-        if (text === "\n") break;
-        process.stdout.write(theme.muted("│ "));
-        state.inText = true;
-      }
-      const parts = text.split("\n");
-      for (let i = 0; i < parts.length; i++) {
-        if (i > 0) {
-          // 末尾单独换行：先结束本段，下一 delta 再开 │
-          if (i === parts.length - 1 && parts[i] === "") {
-            process.stdout.write("\n");
-            state.inText = false;
-            break;
-          }
-          process.stdout.write("\n" + theme.muted("│ "));
-          state.inText = true;
-        }
-        process.stdout.write(theme.assistant(parts[i] ?? ""));
+    case "text_delta":
+      writeAssistantDelta(state, ev.text);
+      break;
+
+    case "tool_start":
+      startToolSpinner(state, ev.id, ev.name, ev.input);
+      break;
+
+    case "tool_result":
+      finishTool(state, ev.id, ev.output, ev.isError);
+      break;
+
+    case "phase":
+      // 仅在开始调模型时给一个轻量 thinking，其余阶段留给日志
+      if (ev.phase === "model_call_start" && state.toolCount === 0 && !state.inText) {
+        writeThinking(state, "thinking…");
       }
       break;
-    }
-    case "tool_start": {
-      ensureNewline(state);
-      state.toolCount += 1;
-      const n = String(state.toolCount).padStart(2, "0");
-      console.log(
-        theme.muted("│ ") +
-          theme.tool(`▸ #${n} ${chalk.bold(ev.name)}`) +
-          theme.soft(`  ${preview(JSON.stringify(ev.input), 56)}`),
-      );
+
+    case "compact":
+      ensureTextClosed(state);
+      console.log(`${theme.warn("●")} ${theme.muted(`compact ${ev.before} → ${ev.after}`)}`);
       break;
-    }
-    case "tool_result": {
-      ensureNewline(state);
-      const mark = ev.isError ? theme.err("✗") : theme.ok("✓");
-      const body = preview(ev.output.replace(/\n/g, " · "), 78);
-      console.log(
-        theme.muted("│   ") +
-          mark +
-          " " +
-          theme.soft(ev.name) +
-          (body ? theme.muted(`  ${body}`) : ""),
-      );
+
+    case "error":
+      ensureTextClosed(state);
+      stopAllSpinners(state);
+      console.log(`${theme.err("●")} ${theme.err(ev.error)}`);
       break;
-    }
-    case "phase": {
-      ensureNewline(state);
-      // 终端只显示关键阶段，避免刷屏
-      if (
-        ev.phase === "loop_step" ||
-        ev.phase === "model_call_start" ||
-        ev.phase === "tool_dispatch" ||
-        ev.phase === "end_turn"
-      ) {
-        const label =
-          ev.phase === "loop_step"
-            ? `step ${ev.step}`
-            : ev.phase === "model_call_start"
-              ? "model"
-              : ev.phase === "tool_dispatch"
-                ? "tools"
-                : "end";
-        console.log(
-          theme.muted("│ ") +
-            theme.soft(`· ${label}`) +
-            (ev.detail ? theme.muted(`  ${preview(ev.detail, 60)}`) : ""),
-        );
-      }
-      break;
-    }
+
+    case "status":
     case "llm_call":
-      // 细节已在 exec/llm 日志；终端保持安静
-      break;
-    case "compact": {
-      ensureNewline(state);
-      console.log(
-        theme.muted("│ ") + theme.warn(`↻ compact  ${ev.before} → ${ev.after} chars`),
-      );
-      break;
-    }
-    case "status": {
-      ensureNewline(state);
-      console.log(theme.muted("│ ") + theme.soft(ev.message));
-      break;
-    }
-    case "error": {
-      ensureNewline(state);
-      console.log(theme.muted("│ ") + theme.err(`error: ${ev.error}`));
-      break;
-    }
+    case "assistant_message":
     default:
       break;
   }
@@ -258,10 +181,10 @@ function renderEvent(ev: StreamEvent, state: RenderState): void {
 function renderTerminal(t: TerminalReason): void {
   if (t.kind === "end_turn") return;
   if (t.kind === "max_turns") {
-    console.log(theme.muted("│ ") + theme.warn(`stopped · max turns ${t.turns}`));
+    console.log(`${theme.warn("●")} ${theme.muted(`stopped · max turns ${t.turns}`)}`);
   } else if (t.kind === "aborted") {
-    console.log(theme.muted("│ ") + theme.warn("aborted"));
+    console.log(`${theme.warn("●")} ${theme.muted("aborted")}`);
   } else if (t.kind === "error") {
-    console.log(theme.muted("│ ") + theme.err(`error · ${t.error}`));
+    console.log(`${theme.err("●")} ${theme.err(t.error)}`);
   }
 }
