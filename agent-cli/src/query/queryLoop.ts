@@ -9,7 +9,7 @@
  *     否则 end_turn
  *   }
  *
- * UI / REPL / --print / 子代理 都复用这一条循环。
+ * 通过 yield phase 事件，让执行日志能画出清晰的流水线。
  */
 import type {
   ContentBlock,
@@ -38,37 +38,36 @@ export type ModelResponse = {
 };
 
 export type QueryLoopOptions = {
-  /** 可变的对话历史（循环内会追加 assistant / tool_result） */
   messages: Message[];
   tools: ToolDefinition[];
   toolContext: ToolContext;
   systemPrompt: string;
-  /** 模型调用：本身也是 AsyncGenerator，先 yield 流式事件，最后 return ModelResponse */
   modelCall: (req: ModelRequest) => AsyncGenerator<StreamEvent, ModelResponse>;
   maxTurns?: number;
-  /** 触发自动压缩的历史字符数阈值 */
   compactThresholdChars?: number;
   signal?: AbortSignal;
 };
 
-/**
- * 运行 Agent 循环。
- * @yields StreamEvent 供 UI 渲染
- * @returns TerminalReason 说明为何停止
- */
 export async function* runQueryLoop(opts: QueryLoopOptions): AsyncGenerator<StreamEvent, TerminalReason> {
   const maxTurns = opts.maxTurns ?? 40;
   const toolMap = new Map(opts.tools.map((t) => [t.name, t]));
   const { toolsToAnthropic } = await import("../tools/registry.js");
-  // 把 Zod schema 转成模型可消费的 JSON Schema 工具列表
   const anthropicTools = toolsToAnthropic(opts.tools);
 
-  let turn = 0;
-  while (turn < maxTurns) {
+  let step = 0;
+  while (step < maxTurns) {
     if (opts.signal?.aborted) return { kind: "aborted" };
-    turn += 1;
+    step += 1;
 
-    // ① 调用模型前：必要时压缩历史，避免撑爆上下文窗口
+    yield {
+      type: "phase",
+      step,
+      phase: "loop_step",
+      detail: `Agent 循环第 ${step} 步（模型推理 → 可选工具 → 回灌）`,
+    };
+
+    // ① 压缩检查
+    yield { type: "phase", step, phase: "compact_check", detail: "检查上下文是否需要压缩" };
     const compacted = await maybeCompact(opts.messages, {
       thresholdChars: opts.compactThresholdChars ?? 180_000,
       modelCall: opts.modelCall,
@@ -80,6 +79,12 @@ export async function* runQueryLoop(opts: QueryLoopOptions): AsyncGenerator<Stre
       opts.messages.length = 0;
       opts.messages.push(...compacted.messages);
       yield {
+        type: "phase",
+        step,
+        phase: "compact_done",
+        detail: `${compacted.beforeChars} → ${compacted.afterChars} chars`,
+      };
+      yield {
         type: "compact",
         before: compacted.beforeChars,
         after: compacted.afterChars,
@@ -87,7 +92,13 @@ export async function* runQueryLoop(opts: QueryLoopOptions): AsyncGenerator<Stre
       };
     }
 
-    // ② 调用模型（流式转发事件）
+    // ② 调用模型
+    yield {
+      type: "phase",
+      step,
+      phase: "model_call_start",
+      detail: `messages=${opts.messages.length} tools=${anthropicTools.length}`,
+    };
     let modelResult: ModelResponse;
     try {
       const gen = opts.modelCall({
@@ -108,18 +119,37 @@ export async function* runQueryLoop(opts: QueryLoopOptions): AsyncGenerator<Stre
       return { kind: "error", error: msg };
     }
 
-    // ③ 把助手消息写入历史
+    const toolUses = modelResult.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
+    const textPreview = modelResult.content
+      .filter((b): b is { type: "text"; text: string } => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .slice(0, 120);
+    yield {
+      type: "phase",
+      step,
+      phase: "model_call_end",
+      detail: `stop=${modelResult.stopReason} tools=${toolUses.length}${textPreview ? ` text="${textPreview.replace(/\n/g, " ")}…"` : ""}`,
+    };
+
+    // ③ 写入历史
     const assistantMsg: Message = { role: "assistant", content: modelResult.content };
     opts.messages.push(assistantMsg);
     yield { type: "assistant_message", message: assistantMsg };
 
-    // ④ 无工具调用 → 本轮结束
-    const toolUses = modelResult.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
+    // ④ 无工具 → 结束
     if (toolUses.length === 0 || modelResult.stopReason === "end_turn") {
+      yield { type: "phase", step, phase: "end_turn", detail: "模型未再请求工具，本轮结束" };
       return { kind: "end_turn" };
     }
 
-    // ⑤ 逐个执行工具：校验 → 权限 → execute
+    // ⑤ 执行工具
+    yield {
+      type: "phase",
+      step,
+      phase: "tool_dispatch",
+      detail: toolUses.map((t) => t.name).join(", "),
+    };
     const results: ToolResultBlock[] = [];
     for (const use of toolUses) {
       yield { type: "tool_start", id: use.id, name: use.name, input: use.input };
@@ -160,8 +190,14 @@ export async function* runQueryLoop(opts: QueryLoopOptions): AsyncGenerator<Stre
       }
     }
 
-    // ⑥ 工具结果作为 user 消息回灌（Anthropic / 兼容协议惯例）
+    // ⑥ 回灌历史，进入下一步模型调用
     opts.messages.push({ role: "user", content: results });
+    yield {
+      type: "phase",
+      step,
+      phase: "tool_results_to_history",
+      detail: `回写 ${results.length} 条 tool_result，进入下一步模型推理`,
+    };
   }
 
   return { kind: "max_turns", turns: maxTurns };

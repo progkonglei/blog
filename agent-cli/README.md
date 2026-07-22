@@ -44,30 +44,31 @@ MOCK_LLM=1 npm run dev -- -p "hello"
 
 Supported providers via `AGENT_PROVIDER`: `deepseek` | `openai` | `anthropic` (auto-detects from env keys).
 
-## LLM 请求日志
-
-默认开启：每次调用大模型都会把 `system` / `messages` / `tools` 写到本地：
-
-```text
-.sessions/llm-logs/<sessionId>/
-  requests.jsonl       # 索引
-  0001-request.json    # 完整请求
-  0001-response.json   # 模型返回
-```
-
-关闭：`AGENT_LLM_LOG=0`。自定义目录：`AGENT_LLM_LOG_DIR=...`。
-
 ## 会话执行日志
 
-默认开启：记录用户输入、工具调用/结果、助手输出、权限决定、结束原因：
+默认开启，目录：
 
 ```text
 .sessions/exec-logs/<sessionId>/
-  exec.jsonl   # 结构化事件
-  exec.log     # 人类可读
+  flow.log                 # 带阶段的流水线（推荐先看）
+  exec.jsonl               # 全量事件
+  session-summary.md       # 整场总览
+  turns/
+    turn-01-summary.md     # 每轮调用总结（流程 + 工具 + 结论）
+    turn-01-summary.json
 ```
 
 关闭：`AGENT_EXEC_LOG=0`。
+
+## LLM 请求日志
+
+```text
+.sessions/llm-logs/<sessionId>/
+  0001-request.json / 0001-response.json / 0001-summary.md
+  requests.jsonl
+```
+
+关闭：`AGENT_LLM_LOG=0`。
 
 ## Built-in tools
 

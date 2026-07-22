@@ -205,6 +205,34 @@ function renderEvent(ev: StreamEvent, state: RenderState): void {
       );
       break;
     }
+    case "phase": {
+      ensureNewline(state);
+      // 终端只显示关键阶段，避免刷屏
+      if (
+        ev.phase === "loop_step" ||
+        ev.phase === "model_call_start" ||
+        ev.phase === "tool_dispatch" ||
+        ev.phase === "end_turn"
+      ) {
+        const label =
+          ev.phase === "loop_step"
+            ? `step ${ev.step}`
+            : ev.phase === "model_call_start"
+              ? "model"
+              : ev.phase === "tool_dispatch"
+                ? "tools"
+                : "end";
+        console.log(
+          theme.muted("│ ") +
+            theme.soft(`· ${label}`) +
+            (ev.detail ? theme.muted(`  ${preview(ev.detail, 60)}`) : ""),
+        );
+      }
+      break;
+    }
+    case "llm_call":
+      // 细节已在 exec/llm 日志；终端保持安静
+      break;
     case "compact": {
       ensureNewline(state);
       console.log(

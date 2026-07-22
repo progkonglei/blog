@@ -50,8 +50,24 @@ export type StreamEvent =
   | { type: "tool_result"; id: string; name: string; output: string; isError?: boolean } // 工具结果
   | { type: "assistant_message"; message: Message } // 完整助手消息（已写入历史）
   | { type: "status"; message: string } // 状态提示
+  | {
+      /** Agent 循环阶段标记，用于执行日志画出清晰流程图 */
+      type: "phase";
+      step: number; // 查询循环第几步（一次用户输入内可多步：模型→工具→模型…）
+      phase:
+        | "loop_step"
+        | "compact_check"
+        | "compact_done"
+        | "model_call_start"
+        | "model_call_end"
+        | "tool_dispatch"
+        | "tool_results_to_history"
+        | "end_turn";
+      detail?: string;
+    }
   | { type: "compact"; before: number; after: number; summary: string } // 上下文压缩完成
-  | { type: "error"; error: string }; // 错误
+  | { type: "error"; error: string } // 错误
+  | { type: "llm_call"; id: string; kind: "request" | "response"; stopReason?: string; approxChars?: number }; // 关联 llm-logs 序号
 
 /** 查询循环终止原因（生成器 return 值） */
 export type TerminalReason =

@@ -1,13 +1,14 @@
 /**
  * 大模型请求落盘
  *
- * 每次调用模型前，把 system / messages / tools 摘要写成本地文件，
- * 便于排查「到底给模型看了什么」。
+ * 每次调用模型前，把 system / messages / tools 写成本地文件，
+ * 并通过 StreamEvent.llm_call 通知执行日志，把「第几次 LLM」串到流水线上。
  *
  * 目录默认：<cwd>/.sessions/llm-logs/<sessionId>/
- *   ├── requests.jsonl          # 追加索引（一行一次请求）
- *   ├── 0001-request.json       # 完整请求体
- *   └── 0001-response.json      # 模型返回（可选，便于对照）
+ *   ├── requests.jsonl
+ *   ├── 0001-request.json
+ *   ├── 0001-response.json
+ *   └── 0001-summary.md      # 单次调用摘要
  */
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -16,11 +17,8 @@ import type { StreamEvent } from "../../types/messages.js";
 import type { ModelCaller } from "../api/provider.js";
 
 export type LlmLogOptions = {
-  /** 日志根目录 */
   dir: string;
-  /** 是否启用（可用 AGENT_LLM_LOG=0 关闭） */
   enabled?: boolean;
-  /** 是否同时记录模型响应 */
   logResponse?: boolean;
 };
 
@@ -36,13 +34,22 @@ export class LlmRequestLogger {
     this.logResponse = opts.logResponse ?? process.env.AGENT_LLM_LOG_RESPONSE !== "0";
   }
 
-  /** 包装 modelCall：请求前写文件，返回后再写响应 */
+  /** 包装 modelCall：写文件 + 向下游 yield llm_call 事件 */
   wrap(inner: ModelCaller): ModelCaller {
     if (!this.enabled) return inner;
 
     const self = this;
     return async function* loggedCall(req: ModelRequest) {
-      const id = await self.writeRequest(req);
+      const meta = await self.writeRequest(req);
+      if (meta) {
+        yield {
+          type: "llm_call",
+          id: meta.id,
+          kind: "request",
+          approxChars: meta.approxChars,
+        } satisfies StreamEvent;
+      }
+
       const gen = inner(req);
       let next = await gen.next();
       while (!next.done) {
@@ -50,37 +57,41 @@ export class LlmRequestLogger {
         next = await gen.next();
       }
       const response = next.value as ModelResponse;
-      if (id != null && self.logResponse) {
-        await self.writeResponse(id, response);
+
+      if (meta && self.logResponse) {
+        await self.writeResponse(meta.id, response, req);
+        yield {
+          type: "llm_call",
+          id: meta.id,
+          kind: "response",
+          stopReason: response.stopReason,
+        } satisfies StreamEvent;
       }
       return response;
     };
   }
 
-  /** 写入一次请求；返回序号（如 0001） */
-  async writeRequest(req: ModelRequest): Promise<string | null> {
+  async writeRequest(req: ModelRequest): Promise<{ id: string; approxChars: number } | null> {
     if (!this.enabled) return null;
     await mkdir(this.dir, { recursive: true });
     this.seq += 1;
     const id = String(this.seq).padStart(4, "0");
     const ts = new Date().toISOString();
+    const approxChars = estimateChars(req);
 
     const record = {
       id,
       ts,
       system: req.system,
       messages: req.messages,
-      // tools 完整 schema 很大；默认只记名字，完整 schema 另存
       tools: req.tools.map((t) => t.name),
       tool_schemas: req.tools,
       message_count: req.messages.length,
-      approx_chars: estimateChars(req),
+      approx_chars: approxChars,
     };
 
-    const file = path.join(this.dir, `${id}-request.json`);
-    await writeFile(file, JSON.stringify(record, null, 2), "utf8");
+    await writeFile(path.join(this.dir, `${id}-request.json`), JSON.stringify(record, null, 2), "utf8");
 
-    // 索引行：方便用 jq / rg 快速扫
     await appendFile(
       path.join(this.dir, "requests.jsonl"),
       `${JSON.stringify({
@@ -89,20 +100,19 @@ export class LlmRequestLogger {
         file: `${id}-request.json`,
         tools: record.tools,
         message_count: record.message_count,
-        approx_chars: record.approx_chars,
+        approx_chars: approxChars,
         last_role: lastRole(req),
       })}\n`,
       "utf8",
     );
 
-    return id;
+    return { id, approxChars };
   }
 
-  async writeResponse(id: string, response: ModelResponse): Promise<void> {
+  async writeResponse(id: string, response: ModelResponse, req: ModelRequest): Promise<void> {
     if (!this.enabled) return;
-    const file = path.join(this.dir, `${id}-response.json`);
     await writeFile(
-      file,
+      path.join(this.dir, `${id}-response.json`),
       JSON.stringify(
         {
           id,
@@ -115,6 +125,34 @@ export class LlmRequestLogger {
       ),
       "utf8",
     );
+
+    // 单次调用摘要，方便快速扫
+    const toolUses = response.content.filter((b) => b.type === "tool_use");
+    const texts = response.content
+      .filter((b): b is { type: "text"; text: string } => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
+    const md = [
+      `# LLM 调用 #${id} 摘要`,
+      "",
+      `| 项 | 值 |`,
+      `|---|---|`,
+      `| stopReason | ${response.stopReason} |`,
+      `| 入参 messages | ${req.messages.length} |`,
+      `| 可用 tools | ${req.tools.map((t) => t.name).join(", ") || "(无)"} |`,
+      `| 本次 tool_use | ${toolUses.length ? toolUses.map((t) => (t.type === "tool_use" ? t.name : "")).join(", ") : "(无)"} |`,
+      "",
+      "## 模型文本",
+      "",
+      texts.trim() || "_(空)_",
+      "",
+      "## 文件",
+      "",
+      `- \`${id}-request.json\``,
+      `- \`${id}-response.json\``,
+      "",
+    ].join("\n");
+    await writeFile(path.join(this.dir, `${id}-summary.md`), md, "utf8");
   }
 }
 
@@ -131,7 +169,6 @@ function lastRole(req: ModelRequest): string {
   return last?.role ?? "(empty)";
 }
 
-/** 根据 cwd / sessionId 解析日志目录 */
 export function resolveLlmLogDir(cwd: string, sessionId?: string): string {
   const override = process.env.AGENT_LLM_LOG_DIR;
   if (override) {
