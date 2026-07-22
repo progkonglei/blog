@@ -189,7 +189,7 @@ export function VimMultilineInput({ onSubmit, disabled }: Props) {
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      {/* Claude Code–style prompt separator */}
+      {/* Claude Code–style: rules above and below the input */}
       <Text dimColor>{rule}</Text>
       {lines.map((line, i) => {
         const prefix = i === 0 ? (
@@ -230,6 +230,7 @@ export function VimMultilineInput({ onSubmit, disabled }: Props) {
           </Box>
         );
       })}
+      <Text dimColor>{rule}</Text>
       {!disabled && mode === "normal" ? (
         <Box marginLeft={2}>
           <Text dimColor>-- NORMAL --</Text>
