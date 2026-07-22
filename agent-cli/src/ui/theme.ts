@@ -40,12 +40,14 @@ export function banner(opts: {
   mode: string;
   llmLogDir?: string;
   execLogDir?: string;
+  docsPath?: string;
 }): void {
   console.log();
   console.log(`${theme.brand("✻")} ${theme.brand("agent-cli")} ${theme.muted("· Claude Code–style coding agent")}`);
   console.log(theme.muted(`  ${opts.cwd}`));
   if (opts.sessionId) console.log(theme.muted(`  session ${opts.sessionId.slice(0, 8)}…`));
   console.log(theme.muted(`  ${opts.mode}`) + (opts.execLogDir ? theme.muted("  · logs on") : ""));
+  if (opts.docsPath) console.log(theme.muted(`  docs ${opts.docsPath}`));
   console.log();
 }
 

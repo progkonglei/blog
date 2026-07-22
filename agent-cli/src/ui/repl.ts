@@ -53,6 +53,7 @@ export async function runRepl(opts: {
     mode: opts.permissionMode,
     llmLogDir: engine.llmLogDir,
     execLogDir: engine.execLogDir,
+    docsPath: engine.docsPath,
   });
 
   try {
@@ -117,6 +118,7 @@ export async function runPrint(opts: {
 
   if (engine.llmLogDir) console.error(theme.muted(`llm-log  ${engine.llmLogDir}`));
   if (engine.execLogDir) console.error(theme.muted(`exec-log ${engine.execLogDir}`));
+  if (engine.docsPath) console.error(theme.muted(`docs     ${engine.docsPath}`));
   console.log();
 
   const state = freshToolUi();

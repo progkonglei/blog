@@ -65,8 +65,11 @@ export class QueryEngine {
 
     const sessionId = this.session.sessionId;
 
-    // 会话执行轨迹（用户输入 / 工具 / 输出）
-    this.execLogger = new SessionExecLogger({ dir: resolveExecLogDir(this.cwd, sessionId) });
+    // 会话执行轨迹（用户输入 / 工具 / 输出）+ 文档沉淀
+    this.execLogger = new SessionExecLogger({
+      dir: resolveExecLogDir(this.cwd, sessionId),
+      cwd: this.cwd,
+    });
     await this.execLogger.init({
       sessionId,
       cwd: this.cwd,
@@ -109,6 +112,11 @@ export class QueryEngine {
   /** 会话执行日志目录 */
   get execLogDir(): string | undefined {
     return this.execLogger?.enabled ? this.execLogger.dir : undefined;
+  }
+
+  /** 沉淀到 docs/runs 的会话文档路径 */
+  get docsPath(): string | undefined {
+    return this.execLogger?.docsPath;
   }
 
   get history(): Message[] {

@@ -60,6 +60,19 @@ Supported providers via `AGENT_PROVIDER`: `deepseek` | `openai` | `anthropic` (a
 
 关闭：`AGENT_EXEC_LOG=0`。
 
+## 文档沉淀（可进 Git）
+
+每次运行自动写入 `docs/runs/`（与 `.sessions` 不同，**默认适合提交**）：
+
+```text
+docs/runs/
+  INDEX.md / LATEST.md / HISTORY.jsonl
+  YYYY-MM-DD_xxxxxxxx.md
+  YYYY-MM-DD_xxxxxxxx/turn-01.md
+```
+
+关闭：`AGENT_DOC_DEPOSIT=0`。
+
 ## LLM 请求日志
 
 ```text

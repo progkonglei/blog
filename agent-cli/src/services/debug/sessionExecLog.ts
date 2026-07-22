@@ -4,20 +4,22 @@
  * 目标：让「Agent 怎么跑的」一眼能看懂，并且每轮有独立总结。
  *
  * 目录：.sessions/exec-logs/<sessionId>/
- *   ├── flow.log                 # 带阶段的人类可读流水线
- *   ├── exec.jsonl               # 全量结构化事件
- *   ├── turns/
- *   │   ├── turn-01-summary.md   # 本轮中文总结（流程 + 工具 + 结论）
- *   │   └── turn-01-summary.json
- *   └── session-summary.md       # 整场会话总览
+ *   ├── flow.log / exec.jsonl / session-summary.md / turns/
+ *
+ * 同时通过 DocDeposit 沉淀到 docs/runs/（可提交进仓库）。
  */
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StreamEvent, TerminalReason } from "../../types/messages.js";
+import { DocDeposit, resolveRunsDir, type DepositTurn } from "./docDeposit.js";
 
 export type SessionExecLogOptions = {
   dir: string;
   enabled?: boolean;
+  /** 项目 cwd，用于解析 docs/runs */
+  cwd?: string;
+  /** 是否沉淀到 docs/runs（默认开） */
+  depositDocs?: boolean;
 };
 
 type ToolCallRec = {
@@ -66,6 +68,8 @@ export class SessionExecLogger {
   readonly flowPath: string;
   readonly turnsDir: string;
   readonly sessionSummaryPath: string;
+  private deposit: DocDeposit | null = null;
+  private depositedTurns: DepositTurn[] = [];
 
   private textBuf = "";
   private turn = 0;
@@ -81,6 +85,16 @@ export class SessionExecLogger {
     this.flowPath = path.join(this.dir, "flow.log");
     this.turnsDir = path.join(this.dir, "turns");
     this.sessionSummaryPath = path.join(this.dir, "session-summary.md");
+
+    const wantDeposit = opts.depositDocs ?? process.env.AGENT_DOC_DEPOSIT !== "0";
+    if (wantDeposit && opts.cwd) {
+      this.deposit = new DocDeposit({ runsDir: resolveRunsDir(opts.cwd) });
+    }
+  }
+
+  /** 已沉淀的会话文档路径（docs/runs/...） */
+  get docsPath(): string | undefined {
+    return this.deposit?.sessionDocPath;
   }
 
   async init(meta: Record<string, unknown>): Promise<void> {
@@ -100,6 +114,18 @@ export class SessionExecLogger {
       "图例: [STEP] 循环步  |  [LLM] 模型调用  |  [TOOL] 工具  |  [PHASE] 阶段",
       "",
     ].join("\n"));
+
+    if (this.deposit) {
+      const docPath = await this.deposit.begin({
+        sessionId: String(meta.sessionId ?? ""),
+        cwd: String(meta.cwd ?? ""),
+        permissionMode: String(meta.permissionMode ?? ""),
+        startedAt: new Date().toISOString(),
+      });
+      if (docPath) {
+        await this.flow(`  ✎ 文档沉淀: ${docPath}`);
+      }
+    }
   }
 
   async turnStart(userText: string): Promise<void> {
@@ -277,6 +303,22 @@ export class SessionExecLogger {
     await writeFile(path.join(this.turnsDir, `turn-${id}-summary.md`), summaryMd, "utf8");
     await this.flow(`  ✎ 本轮总结已写入 turns/turn-${id}-summary.md\n`);
 
+    // 沉淀到 docs/runs（可进仓库）
+    const deposited: DepositTurn = {
+      turn: done.turn,
+      oneLineSummary: summaryJson.oneLineSummary,
+      markdown: summaryMd,
+      user: done.userText,
+      tools: done.tools.map((t) => t.name),
+      llmCalls: summaryJson.stats.llmCalls,
+      durationMs: summaryJson.durationMs,
+    };
+    this.depositedTurns.push(deposited);
+    await this.deposit?.depositTurn(deposited, this.depositedTurns);
+    if (this.deposit?.sessionDocPath) {
+      await this.flow(`  ✎ 已沉淀文档 ${this.deposit.sessionDocPath}`);
+    }
+
     // 更新会话总览
     await this.writeSessionSummary();
   }
@@ -297,6 +339,23 @@ export class SessionExecLogger {
     await this.flushText();
     await this.writeEvent({ type: "session_end" });
     await this.writeSessionSummary();
+
+    if (this.deposit) {
+      const sessionBody = renderSessionSummaryMd(this.sessionMeta, this.turns);
+      const finalized = await this.deposit.finalize(
+        {
+          sessionId: String(this.sessionMeta.sessionId ?? ""),
+          cwd: String(this.sessionMeta.cwd ?? ""),
+          permissionMode: String(this.sessionMeta.permissionMode ?? ""),
+        },
+        this.depositedTurns,
+        sessionBody,
+      );
+      if (finalized) {
+        await this.flow(`  ✎ 会话文档已定稿: ${finalized}`);
+      }
+    }
+
     await this.flow("\n═══ session end ═══\n");
   }
 
