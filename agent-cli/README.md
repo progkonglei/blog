@@ -135,6 +135,15 @@ src/
     repl.ts              # legacy readline / --print
 ```
 
+## Documentation
+
+| 文档 | 说明 |
+|------|------|
+| [架构总览](docs/architecture-overview.md) | 模块职责、依赖关系、数据流 |
+| [工具系统](docs/tool-system.md) | 内置工具详解、权限模型、扩展方式 |
+| [输入→输出执行逻辑](docs/input-output-execution.md) | 执行链路详解、稳定性分析 |
+| [安装与配置指南](docs/setup-guide.md) | 从零开始的安装、配置、常见问题 |
+
 ## Disclaimer
 
 This is a **teaching harness**. Claude Code itself is proprietary; community write-ups of its architecture informed the design. Do not expect feature parity (Ink UI, 40+ tools, 7 safety layers, hooks, etc.).
