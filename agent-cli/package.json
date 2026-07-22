@@ -1,0 +1,41 @@
+{
+  "name": "agent-cli",
+  "version": "0.1.0",
+  "description": "Claude Code–inspired TypeScript coding agent CLI (educational)",
+  "type": "module",
+  "bin": {
+    "agent-cli": "./dist/entrypoints/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/entrypoints/cli.ts",
+    "start": "node dist/entrypoints/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke": "tsx src/entrypoints/cli.ts --help"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "agent",
+    "cli",
+    "claude-code",
+    "mcp",
+    "typescript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.57.0",
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "chalk": "^5.4.1",
+    "commander": "^14.0.0",
+    "glob": "^11.0.3",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
